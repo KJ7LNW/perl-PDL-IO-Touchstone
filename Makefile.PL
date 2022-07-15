@@ -15,6 +15,7 @@ my %WriteMakefileArgs = (
     },
     TEST_REQUIRES => {
         'Test::More' => '0',
+	'File::Temp' => '0',
     },
     PREREQ_PM => {
 	    'PDL' => '2.080'
