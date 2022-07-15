@@ -97,9 +97,9 @@ sub rsnp
 			next;
 		}
 
-		if ($line !~ /^\d/)
+		if ($line !~ /^[0-9.+-]/)
 		{
-			carp "$fn:$n: unexpected line $n: $line\n";
+			die "$fn:$n: unexpected line $n: $line\n";
 			next;
 		}
 
@@ -252,7 +252,7 @@ sub wsnp_fh
 	$to_hz =~ s!^([kmgtpe]?)hz$!uc($1 // '') . "Hz"!ie;
 
 	# Format header and comments:
-	print $fd join("\n", $comments) . "\n" if ($comments && @$comments);
+	print $fd join("\n", map { "! $_" } @$comments) . "\n" if ($comments && @$comments);
 	print $fd "# $to_hz $param_type $fmt R $z0\n";
 
 	# $out is in touchstone-formated order for each frequency with frequency as the first element:
@@ -270,8 +270,6 @@ sub wsnp_fh
 		{
 			$fm = $fm->reshape($n_ports*2,$n_ports);
 		}
-
-		print $fm;
 
 		print $fd $freq;
 
@@ -297,7 +295,6 @@ sub wsnp_fh
 			}
 
 		}
-		print "$i: $fm\n";
 	}
 
 	# we don't close the file descriptor here, the caller (or `wsnp`) will.
@@ -312,7 +309,7 @@ sub _cols_to_matrix
 	my @cx;
 	my $n = $cols->[0][0]->nelem;
 	my $n_ports = sqrt(scalar @$cols);
-	print "n=$n\n";
+
 	foreach my $c (@$cols)
 	{
 		my $a = $c->[0];
@@ -440,7 +437,7 @@ utilize the data loaded by C<rsnp()>:
 
 =over 4
 
-=item * C<$f> - A (1,M) vector piddle of input frequencies where C<M> is the
+=item * C<$f> - A (M,1) vector piddle of input frequencies where C<M> is the
 number of frequencies.
 
 =item * C<$m> - A (N,N,M) piddle of X-parameter matrices where C<N> is the number
