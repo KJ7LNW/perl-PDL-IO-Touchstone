@@ -32,6 +32,9 @@ use PDL;
 use PDL::Ops;
 use PDL::Constants qw(PI);
 
+use constant RAD2DEG => 180/PI;
+use constant DEG2RAD => PI/180;
+
 BEGIN {  
 	use Exporter;
 	our @ISA = ( @ISA, qw(Exporter) );
@@ -54,8 +57,6 @@ sub rsnp
 
 	my $n = 0;
 	my $line;
-
-	my $hz;
 
 	# start at -1 because it increments when a frequency is found.
 	my $row_idx = -1;
@@ -129,8 +130,8 @@ sub rsnp
 				}
 			}
 
-			$hz = shift(@params);
-			$f[$row_idx] = $hz;
+			# Read the frequency off the front.
+			$f[$row_idx] = shift(@params);
 			$col_idx=0;
 		}
 
@@ -167,19 +168,9 @@ sub rsnp
 
 	my $m = _cols_to_matrix($fmt, \@cols);
 
-	my $f = pdl \@f;
+	my $funit = $args->{units} || 'Hz';
+	my $f = _si_scale_hz($orig_funit, $funit, pdl \@f);
 
-	my $funit;
-	if ($args->{units})
-	{
-		$funit = $args->{units};
-	}
-	else
-	{
-		$funit = 'Hz'
-	}
-
-	$f = _si_scale_hz($orig_funit, $funit, $f);
 	return ($f, $m, $param_type, $z0, $comments, $fmt, $funit, $orig_funit);
 }
 
@@ -221,27 +212,31 @@ sub wsnp_fh
 	# $d is arranged so real and imag parts can be separated into their own
 	# columns with clump() for writing to the sNp file:
 	my $d = $m->dummy(0,1);
+	
+
+	# $real and $imag are the real and imag parts:
+	my ($real, $imag);
 	if ($fmt eq 'ri')
 	{
-		$a = $d->re;
-		$b = $d->im;
+		$real = $d->re;
+		$imag = $d->im;
 	}
 	elsif ($fmt eq 'ma')
 	{
-		$a = $d->abs;
-		$b = $d->carg * 180 / PI;
+		$real = $d->abs;
+		$imag = $d->carg * RADTODEG;
 	}
 	elsif ($fmt eq 'db')
 	{
-		$a = 20*log($d->abs)/log(10);
-		$b = $d->carg * 180 / PI;
+		$real = 20*log($d->abs)/log(10);
+		$imag = $d->carg * RADTODEG;
 	}
 
 	# Prepare real/imag values for interleaving:
-	my $ab = $a->append($b);
+	my $ri = $real->append($imag);
 
 	# Create one row per frequency: (n_ports*2, n_freqs):
-	my $out = $ab->clump(0..2);
+	my $out = $ri->clump(0..2);
 
 	# Scale the input/output frequency:
 	$f = _si_scale_hz($from_hz, $to_hz, $f);
@@ -312,20 +307,20 @@ sub _cols_to_matrix
 
 	foreach my $c (@$cols)
 	{
-		my $a = $c->[0];
-		my $b = $c->[1];
+		my $r = $c->[0];
+		my $i = $c->[1];
 		if ($fmt eq 'ri')
 		{
-			push @cx, $a + $b*i();
+			push @cx, $r + $i*i();
 		}
 		elsif ($fmt eq 'ma')
 		{
-			push @cx, $a*exp(i()*$b*PI()/180);
+			push @cx, $r*exp(i()*$i*DEG2RAD);
 		}
 		elsif ($fmt eq 'db')
 		{
-			my $a = 10**($a/20);
-			push @cx, $a*exp(i()*$b*PI()/180);
+			my $r = 10**($r/20);
+			push @cx, $r*exp(i()*$i*DEG2RAD);
 		}
 		else
 		{
@@ -358,6 +353,22 @@ sub _si_scale_hz
 	croak "Unknown frequency scale: $fscale" if !$fscale;
 
 	return $n*$fscale;
+}
+
+sub s_to_y
+{
+	my ($S, $z0) = @_;
+
+	my ($n_ports) = $S->index(0)->dims;
+
+	my $g;
+	if (ref($z0) ne 'PDL')
+	{
+		$z0 = identity($n_ports) * $z0;
+	}
+
+	$g = stretcher(1/sqrt($z0->re));
+	#my $Y = $g->inv*($S*$z0+$z0)->inv() * ($id-$S)*$g;
 }
 
 1;
@@ -437,7 +448,7 @@ utilize the data loaded by C<rsnp()>:
 
 =over 4
 
-=item * C<$f> - A (M,1) vector piddle of input frequencies where C<M> is the
+=item * C<$f> - A (M) vector piddle of input frequencies where C<M> is the
 number of frequencies.
 
 =item * C<$m> - A (N,N,M) piddle of X-parameter matrices where C<N> is the number
