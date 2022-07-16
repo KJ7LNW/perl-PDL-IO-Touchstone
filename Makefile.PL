@@ -10,6 +10,19 @@ my %WriteMakefileArgs = (
     ABSTRACT_FROM    => 'lib/PDL/IO/Touchstone.pm',
     LICENSE          => 'gpl_3',
     MIN_PERL_VERSION => '5.010',
+    META_MERGE => {
+	    "meta-spec" => { version => 2 },
+	    resources => {
+	       homepage => 'https://github.com/KJ7LNW/perl-PDL-IO-Touchstone',
+	       bugtracker  => {web=>'https://github.com/KJ7LNW/perl-PDL-IO-Touchstone/issues'},
+	       repository  => {
+		  url => 'git@github.com:KJ7LNW/perl-PDL-IO-Touchstone.git',
+		  type => 'git',
+		  web => 'https://github.com/KJ7LNW/perl-PDL-IO-Touchstone.git',
+	       },
+	       #x_IRC => 'irc://irc.perl.org/#maybe-someday?',
+	    },
+    },
     CONFIGURE_REQUIRES => {
         'ExtUtils::MakeMaker' => '0',
     },
