@@ -194,7 +194,7 @@ sub wsnp_fh
 {
 	my ($fd, $f, $m, $param_type, $z0, $comments, $fmt, $from_hz, $to_hz) = @_;
 
-	my ($n_ports) = $m->index(0)->dims;
+	my $n_ports = _n_ports($m);
 	my $n_freqs = $f->nelem;
 
 	# Assume $f frequencies are in Hz if from_hz is not defined
@@ -224,12 +224,12 @@ sub wsnp_fh
 	elsif ($fmt eq 'ma')
 	{
 		$real = $d->abs;
-		$imag = $d->carg * RADTODEG;
+		$imag = $d->carg * RAD2DEG;
 	}
 	elsif ($fmt eq 'db')
 	{
 		$real = 20*log($d->abs)/log(10);
-		$imag = $d->carg * RADTODEG;
+		$imag = $d->carg * RAD2DEG;
 	}
 
 	# Prepare real/imag values for interleaving:
@@ -355,20 +355,99 @@ sub _si_scale_hz
 	return $n*$fscale;
 }
 
+# http://qucs.sourceforge.net/tech/node98.html
 sub s_to_y
 {
 	my ($S, $z0) = @_;
 
-	my ($n_ports) = $S->index(0)->dims;
+	my $n_ports = _n_ports($S);
 
-	my $g;
-	if (ref($z0) ne 'PDL')
+	$z0 = pdl $z0 if (!ref($z0));
+
+	my $Z_ref = _to_diagonal($z0, $n_ports);
+	my $G_ref = _to_diagonal(1/sqrt($z0->re), $n_ports);
+	my $E = identity($n_ports);
+
+	my $Y = $G_ref x ($E-$S) x (($E+$S)->inv x $G_ref);
+
+	return $Y;
+}
+
+sub y_to_s
+{
+	my ($Y, $z0) = @_;
+
+	my $n_ports = _n_ports($Y);
+
+	$z0 = pdl $z0 if (!ref($z0));
+
+	my $Z_ref = _to_diagonal($z0, $n_ports);
+	my $G_ref = _to_diagonal(1/sqrt($z0->re), $n_ports);
+	my $E = identity($n_ports);
+
+	my $S = $G_ref  x  ($E - $Z_ref  x  $Y)  x  (($E + $Z_ref  x  $Y)->inv())  x  $G_ref->inv();
+
+	return $S;
+}
+
+sub s_to_z
+{
+	return 1/s_to_y(@_);
+}
+
+
+# Return the number of ports in an (N,N,M) matrix where N is the port 
+# count and M is the number of frequencies.
+sub _n_ports
+{
+	my $m = shift;
+
+	my @dims = $m->slice(':,:,0')->dims;
+
+	croak "matrix must be square $m" if ($dims[0] != $dims[1]);
+
+	return $dims[0];
+}
+
+# Create a diagonal matrix of size n from a scalar or vector $v.
+#
+# For example, $v can represent charectaristic impedance at each port either as:
+#   * a perl scalar value
+#   * a 0-dim pdl like pdl( 5+2*i() )
+#   * a 1-dim single-element pdl like pdl( [5+2*i()] )
+#   * a 1-dim pdl representing the charectaristic impedance at each port
+#
+# In any case, the return value is an (N,N) pdl whith charectaristic impedances
+# for each port along the diagonal:
+#   [50  0]
+#   [ 0 50]
+sub _to_diagonal
+{
+	my ($v, $n_ports) = @_;
+
+	my $ret;
+
+	$v = pdl $v if (!ref($v));
+
+	croak "v must be a PDL or scalar" if (ref($v) ne 'PDL');
+
+	my @dims = $v->dims;
+
+	if (!@dims || (@dims == 1 && $dims[0] == 1))
 	{
-		$z0 = identity($n_ports) * $z0;
+		$ret = zeroes($n_ports,$n_ports);
+		$ret->diagonal(0,1) .= $v;
+	}
+	elsif (@dims == 1 && $dims[0] == $n_ports)
+	{
+		$ret = stretcher($v);
+	}
+	else
+	{
+		croak "\$v must be either a scalar or vector of size $n_ports: $v"
 	}
 
-	$g = stretcher(1/sqrt($z0->re));
-	#my $Y = $g->inv*($S*$z0+$z0)->inv() * ($id-$S)*$g;
+	return $ret;
 }
 
 1;
@@ -545,6 +624,8 @@ this module's scope.  Consult the L</"SEE ALSO"> section for more about MDFs and
 =over 4
 
 =item Touchstone specification: L<https://ibis.org/connector/touchstone_spec11.pdf>
+
+=item S-parameter matrix transform equations: L<http://qucs.sourceforge.net/tech/node98.html>
 
 =item Building MDF files from multiple S2P files: L<https://youtu.be/q1ixcb_mgeM>, L<https://github.com/KJ7NLL/mdf/>
 
