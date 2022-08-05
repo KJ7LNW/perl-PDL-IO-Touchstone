@@ -31,7 +31,8 @@ my %WriteMakefileArgs = (
 	'File::Temp' => '0',
     },
     PREREQ_PM => {
-	    'PDL' => '2.080'
+	    'PDL' => '2.080',
+	    'PDL::LinearAlgebra' => '0'
     },
     dist  => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean => { FILES => 'PDL-IO-Touchstone-*' },

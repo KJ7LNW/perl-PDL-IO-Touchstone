@@ -830,7 +830,7 @@ this module's scope.  Consult the L</"SEE ALSO"> section for more about MDFs and
 is the number of frequencies.
 
 =item * The value of C<$z0> in the conversion functions may be complex-valued and
-is represente as either:
+is represented as either:
 
 =over 4
 

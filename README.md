@@ -139,7 +139,7 @@ this module's scope.  Consult the ["SEE ALSO"](#see-also) section for more about
 - Each matrix below is in the (N,N,M) format where N is the number of ports and M
 is the number of frequencies.
 - The value of `$z0` in the conversion functions may be complex-valued and
-is represente as either:
+is represented as either:
     - - A perl scalar value: all ports have same impedance
     - - A 0-dim pdl like pdl( 5+2\*i() ): all ports have same impedance
     - - A 1-dim single-element pdl like pdl( \[5+2\*i()\] ): all ports have same impedance
