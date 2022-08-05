@@ -1,5 +1,8 @@
 Revision history for PDL-IO-Touchstone
 
-0.01    Date/time
+1.002   Thu Jul 28 18:09:15 2022 -0700
+	Added transforms to/from S and these matrices: Z, Y, ABCD
+
+1.001   Fri Jul 15 17:37:23 2022 -0700
         First version, released on an unsuspecting world.
 

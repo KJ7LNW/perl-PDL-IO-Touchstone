@@ -20,7 +20,7 @@
 #  respective owners and no grant or license is provided thereof.
 
 package PDL::IO::Touchstone;
-$VERSION = 1.001;
+$VERSION = 1.002;
 
 use 5.010;
 use strict;
@@ -29,6 +29,7 @@ use warnings;
 use Carp;
 
 use PDL;
+use PDL::LinearAlgebra;
 use PDL::Ops;
 use PDL::Constants qw(PI);
 
@@ -39,6 +40,16 @@ BEGIN {
 	use Exporter;
 	our @ISA = ( @ISA, qw(Exporter) );
 	our @EXPORT = qw/rsnp wsnp/;
+	our @EXPORT_OK = qw/
+		s_to_y
+		y_to_s
+
+		s_to_z
+		z_to_s
+
+		s_to_abcd
+		abcd_to_s
+		/;
 }
 
 sub rsnp
@@ -368,7 +379,12 @@ sub s_to_y
 	my $G_ref = _to_diagonal(1/sqrt($z0->re), $n_ports);
 	my $E = identity($n_ports);
 
-	my $Y = $G_ref x ($E-$S) x (($E+$S)->inv x $G_ref);
+	my $Y = $G_ref->minv x ($S x $Z_ref + $Z_ref)->minv x ($E-$S) x $G_ref;
+
+	# Alternate conversion, not sure which is faster, both have the same
+	# number of matrix multiplications:
+	#my $Y = $G_ref->minv x $Z_ref->minv x ($S + $E)->minv x ($E-$S) x $G_ref;
+	#my $Y = $G_ref->minv x $Z_ref->minv x ($E-$S) x ($S + $E)->minv x $G_ref;
 
 	return $Y;
 }
@@ -385,14 +401,149 @@ sub y_to_s
 	my $G_ref = _to_diagonal(1/sqrt($z0->re), $n_ports);
 	my $E = identity($n_ports);
 
-	my $S = $G_ref  x  ($E - $Z_ref  x  $Y)  x  (($E + $Z_ref  x  $Y)->inv())  x  $G_ref->inv();
+	my $S = $G_ref  x  ($E - $Z_ref  x  $Y)  x  ($E + $Z_ref  x  $Y)->minv()  x  $G_ref->minv();
 
 	return $S;
 }
 
+# This could result in singularities:
 sub s_to_z
 {
-	return 1/s_to_y(@_);
+	my ($S, $z0) = @_;
+
+	# This tries to avoid a singularity, but not so successfully.
+	#my $Y = s_to_y($S, $z0);
+	#my $Z;
+	#eval {$Z = $Y->minv };
+	#return $Z;
+
+	my $n_ports = _n_ports($S);
+
+	$z0 = pdl $z0 if (!ref($z0));
+
+	my $Z_ref = _to_diagonal($z0, $n_ports);
+	my $G_ref = _to_diagonal(1/sqrt($z0->re), $n_ports);
+	my $E = identity($n_ports);
+
+	# These are equivalent, the second one has a smaller error:
+	#my $Z = $G_ref->minv() x ($E - $S)->minv x ($S x $Z_ref + $Z_ref) x $G_ref;
+	my $Z = $G_ref->minv() x ($E - $S)->minv x ($S + $E) x $Z_ref x $G_ref;
+
+	return $Z;
+}
+
+sub z_to_s
+{
+	my ($Z, $z0) = @_;
+
+	my $n_ports = _n_ports($Z);
+
+	$z0 = pdl $z0 if (!ref($z0));
+
+	my $Z_ref = _to_diagonal($z0, $n_ports);
+	my $G_ref = _to_diagonal(1/sqrt($z0->re), $n_ports);
+	my $E = identity($n_ports);
+
+	my $S = $G_ref x ($Z - $Z_ref) x ($Z + $Z_ref)->minv x $G_ref->minv;
+	return $S;
+
+	# This is equivalent but can result in singularities:
+	# minv needs scalar context for return, so assign temp value
+	# for clarity as to what is happening:
+	#my $Y = $Z->minv;
+	#return y_to_s($Y, $z0);
+}
+
+sub s_to_abcd
+{
+	my ($S, $z0) = @_;
+
+	my $n_ports = _n_ports($S);
+
+	croak "A-matrix transforms only work with 2-port matrices" if $n_ports != 2;
+
+	# We don't really need it diagonal, but it makes the call compatable with other
+	# conversions if the caller has different impedances per port:
+	my $Z_ref = _to_diagonal($z0, $n_ports);
+	my $z01 = $Z_ref->slice(0,0)->reshape(1);
+	my $z02 = $Z_ref->slice(1,1)->reshape(1);
+
+	$z01 = pdl($z01) if (!ref($z01));
+	$z02 //= $z01;
+	$z02 = pdl($z02) if (!ref($z02));
+
+	my $z01_conj = $z01->conj;
+	my $z02_conj = $z02->conj;
+
+	my ($S11, $S12, $S21, $S22) = _m_to_pos_vecs($S);
+
+	# https://www.researchgate.net/publication/3118645
+	# "Conversions Between S, Z, Y, h, ABCD, and T Parameters
+	#   which are Valid for Complex Source and Load Impedances"
+	# March 1994 IEEE Transactions on Microwave Theory and Techniques 42(2):205 - 211
+	return _pos_vecs_to_m(
+			# A
+			(($z01_conj + $S11*$z01) * (1 - $S22) + $S12*$S21*$z01)
+				/ # over
+			(2*$S21*sqrt($z01->re * $z02->re)),
+
+			# B
+			(($z01_conj + $S11*$z01)*($z02_conj+$S22*$z02) - $S12*$S21*$z01*$z02)
+				/ # over
+			(2*$S21*sqrt($z01->re * $z02->re)),
+
+			# C
+			(( 1 - $S11 )*( 1 - $S22 ) - $S12*$S21)
+				/ # over
+			(2*$S21*sqrt($z01->re * $z02->re)),
+
+			# D
+			((1-$S11)*($z02_conj+$S22*$z02) + $S12*$S21*$z02)
+				/ # over
+			(2*$S21*sqrt($z01->re * $z02->re)),
+		);
+}
+
+sub abcd_to_s
+{
+	my ($ABCD, $z0) = @_;
+
+	my $n_ports = _n_ports($ABCD);
+
+	croak "A-matrix transforms only work with 2-port matrices" if $n_ports != 2;
+
+	# We don't really need it diagonal, but it makes the call compatable with other
+	# conversions if the caller has different impedances per port:
+	my $Z_ref = _to_diagonal($z0, $n_ports);
+	my $z01 = $Z_ref->slice(0,0)->reshape(1);
+	my $z02 = $Z_ref->slice(1,1)->reshape(1);
+
+	my $z01_conj = $z01->conj;
+	my $z02_conj = $z02->conj;
+
+	my ($A, $B, $C, $D) = _m_to_pos_vecs($ABCD);
+
+	return _pos_vecs_to_m(
+			# S11
+			($A*$z02 + $B - $C*$z01_conj*$z02 - $D*$z01_conj)
+				/ # over
+			($A*$z02 + $B + $C*$z01*$z02 + $D*$z01),
+
+			# S12
+			(2*($A*$D-$B*$C)*sqrt($z01->re * $z02->re))
+				/ # over
+			($A*$z02 + $B + $C*$z01*$z02 + $D*$z01),
+
+			# S21
+			(2*sqrt($z01->re * $z02->re))
+				/ # over
+			($A*$z02 + $B + $C*$z01*$z02 + $D*$z01),
+
+			# S22
+			(-$A*$z02_conj + $B - $C*$z01*$z02_conj + $D*$z01)
+				/ # over
+			($A*$z02 + $B + $C*$z01*$z02 + $D*$z01)
+		);
 }
 
 
@@ -408,6 +559,57 @@ sub _n_ports
 
 	return $dims[0];
 }
+
+# Return the number of measurements in the n,n,m pdl:
+# This value will be equal to the number of frequencies:
+sub _n_meas
+{
+	my $m = shift;
+
+	my @dims = $m->dims;
+
+	croak "matrix must be square $m" if ($dims[0] != $dims[1]);
+	croak "matrix must have a 3rd dimension" if @dims < 3;
+
+	return $dims[2];
+}
+
+# Converts a NxNxM pdl where M is the number of frequency samples to a
+# N^2-length list of M-sized vectors, each representing a row-ordered position
+# in the NxN matrix.  ROW ORDERED!
+#
+# This enables mutiplying vector positions for things like 2-port S-to-T
+# conversion.
+#
+# For example:
+# 	my ($S11, $S12, $S21, $S22) = _m_to_pos_vecs($S)
+#
+# 	$T11 = -$S->det / $S21
+# 	$T12 = ...
+# 	$T21 = ...
+# 	$T22 = ...
+#
+sub _m_to_pos_vecs
+{
+	my $m = shift;
+
+	return $m->dummy(0,1)->clump(0..2)->transpose->dog;
+}
+
+# inverse of _m_to_pos_vecs:
+# 	$m = _pos_vecs_to_m(_m_to_pos_vecs($m))
+#
+# for example, re-compose $T from the above:
+# 	$T = _pos_vecs_to_m($T11, $T12, $T21, $T22)
+sub _pos_vecs_to_m
+{
+	my @veclist = @_;
+	my $n = sqrt(scalar(@veclist));
+	my ($m) = $veclist[0]->dims;
+
+	return cat(@veclist)->transpose->reshape($n,$n,$m)
+}
+
 
 # Create a diagonal matrix of size n from a scalar or vector $v.
 #
@@ -498,10 +700,11 @@ C<$fmt> and C<$to_hz> fields when writing:
 
 Note that you may change neither C<$param_type> nor C<$z0> unless you have done
 your own matrix transform from one parameter type (or impedance) to another.
-This is because while C<PDL::IO::Touchstone> knows how to convert between RA,
+This is because while C<wsnp> knows how to convert between RA,
 MA, and DB formats, it does not manipulate the matrix to convert between
-parameter types (or impedances).
+parameter types (or impedances).  Use the C<P_to_Q()> functions below to transform between matrix types.
 
+=head1 IO Functions
 
 =head2 C<rsnp($filename, $options)> - Read touchstone file
 
@@ -618,6 +821,103 @@ Same as C<wsnp()> except that it takes a file handle instead of a filename.
 Internally C<wsnp()> uses C<wsnp_fh()> and C<wsnp_fh()> can be useful for
 building MDF files, however MDF files are much more complicated and outside of
 this module's scope.  Consult the L</"SEE ALSO"> section for more about MDFs and optimizing circuits.
+
+=head1 S-Parameter Conversion Functions
+
+=over 4
+
+=item * Each matrix below is in the (N,N,M) format where N is the number of ports and M
+is the number of frequencies.
+
+=item * The value of C<$z0> in the conversion functions may be complex-valued and
+is represente as either:
+
+=over 4
+
+=item - A perl scalar value: all ports have same impedance
+
+=item - A 0-dim pdl like pdl( 5+2*i() ): all ports have same impedance
+
+=item - A 1-dim single-element pdl like pdl( [5+2*i()] ): all ports have same impedance
+
+=item - A 1-dim pdl representing the charectaristic impedance at each port: ports may have different impedances
+
+=back
+
+=back
+
+=head2 C<$Y = s_to_y($S, $z0)>: Convert S-paramters to Y-parameters.
+
+=over 4
+
+=item * C<$S>: The S-paramter matrix
+
+=item * C<$z0>: Charectaristic impedance (see above).
+
+=item * C<$Y>: The resultant Y-paramter matrix
+
+=back
+
+=head2 C<$S = y_to_s($Y, $z0)>: Convert Y-paramters to S-parameters.
+
+=over 4
+
+=item * C<$Y>: The Y-paramter matrix
+
+=item * C<$z0>: Charectaristic impedance (see above).
+
+=item * C<$S>: The resultant S-paramter matrix
+
+=back
+
+=head2 C<$Z = s_to_z($S, $z0)>: Convert S-paramters to Z-parameters.
+
+=over 4
+
+=item * C<$S>: The S-paramter matrix
+
+=item * C<$z0>: Charectaristic impedance (see above).
+
+=item * C<$Z>: The resultant Z-paramter matrix
+
+=back
+
+=head2 C<$S = z_to_s($Z, $z0)>: Convert Z-paramters to S-parameters.
+
+=over 4
+
+=item * C<$Z>: The Z-paramter matrix
+
+=item * C<$z0>: Charectaristic impedance (see above).
+
+=item * C<$S>: The resultant S-paramter matrix
+
+=back
+
+=head2 C<$ABCD = s_to_abcd($S, $z0)>: Convert S-paramters to ABCD-parameters.
+
+=over 4
+
+=item * C<$S>: The S-paramter matrix
+
+=item * C<$z0>: Charectaristic impedance (see above).
+
+=item * C<$ABCD>: The resultant ABCD-paramter matrix
+
+=back
+
+=head2 C<$S = abcd_to_s($ABCD, $z0)>: Convert ABCD-paramters to S-parameters.
+
+=over 4
+
+=item * C<$ABCD>: The ABCD-paramter matrix
+
+=item * C<$z0>: Charectaristic impedance (see above).
+
+=item * C<$S>: The resultant S-paramter matrix
+
+=back
+
 
 =head1 SEE ALSO
 
