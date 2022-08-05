@@ -42,9 +42,11 @@ You may convert between output formats or frequency scale by changing the
 
 Note that you may change neither `$param_type` nor `$z0` unless you have done
 your own matrix transform from one parameter type (or impedance) to another.
-This is because while `PDL::IO::Touchstone` knows how to convert between RA,
+This is because while `wsnp` knows how to convert between RA,
 MA, and DB formats, it does not manipulate the matrix to convert between
-parameter types (or impedances).
+parameter types (or impedances).  Use the `P_to_Q()` functions below to transform between matrix types.
+
+# IO Functions
 
 ## `rsnp($filename, $options)` - Read touchstone file
 
@@ -63,7 +65,7 @@ parameter types (or impedances).
 The first set of parameters (`$f`, `$m`, `$param_type`, `$z0`) are required to properly
 utilize the data loaded by `rsnp()`:
 
-- `$f` - A (M,1) vector piddle of input frequencies where `M` is the
+- `$f` - A (M) vector piddle of input frequencies where `M` is the
 number of frequencies.
 - `$m` - A (N,N,M) piddle of X-parameter matrices where `N` is the number
 of ports and `M` is the number of frequencies. 
@@ -132,9 +134,57 @@ Internally `wsnp()` uses `wsnp_fh()` and `wsnp_fh()` can be useful for
 building MDF files, however MDF files are much more complicated and outside of
 this module's scope.  Consult the ["SEE ALSO"](#see-also) section for more about MDFs and optimizing circuits.
 
+# S-Parameter Conversion Functions
+
+- Each matrix below is in the (N,N,M) format where N is the number of ports and M
+is the number of frequencies.
+- The value of `$z0` in the conversion functions may be complex-valued and
+is represente as either:
+    - - A perl scalar value: all ports have same impedance
+    - - A 0-dim pdl like pdl( 5+2\*i() ): all ports have same impedance
+    - - A 1-dim single-element pdl like pdl( \[5+2\*i()\] ): all ports have same impedance
+    - - A 1-dim pdl representing the charectaristic impedance at each port: ports may have different impedances
+
+## `$Y = s_to_y($S, $z0)`: Convert S-paramters to Y-parameters.
+
+- `$S`: The S-paramter matrix
+- `$z0`: Charectaristic impedance (see above).
+- `$Y`: The resultant Y-paramter matrix
+
+## `$S = y_to_s($Y, $z0)`: Convert Y-paramters to S-parameters.
+
+- `$Y`: The Y-paramter matrix
+- `$z0`: Charectaristic impedance (see above).
+- `$S`: The resultant S-paramter matrix
+
+## `$Z = s_to_z($S, $z0)`: Convert S-paramters to Z-parameters.
+
+- `$S`: The S-paramter matrix
+- `$z0`: Charectaristic impedance (see above).
+- `$Z`: The resultant Z-paramter matrix
+
+## `$S = z_to_s($Z, $z0)`: Convert Z-paramters to S-parameters.
+
+- `$Z`: The Z-paramter matrix
+- `$z0`: Charectaristic impedance (see above).
+- `$S`: The resultant S-paramter matrix
+
+## `$ABCD = s_to_abcd($S, $z0)`: Convert S-paramters to ABCD-parameters.
+
+- `$S`: The S-paramter matrix
+- `$z0`: Charectaristic impedance (see above).
+- `$ABCD`: The resultant ABCD-paramter matrix
+
+## `$S = abcd_to_s($ABCD, $z0)`: Convert ABCD-paramters to S-parameters.
+
+- `$ABCD`: The ABCD-paramter matrix
+- `$z0`: Charectaristic impedance (see above).
+- `$S`: The resultant S-paramter matrix
+
 # SEE ALSO
 
 - Touchstone specification: [https://ibis.org/connector/touchstone\_spec11.pdf](https://ibis.org/connector/touchstone_spec11.pdf)
+- S-parameter matrix transform equations: [http://qucs.sourceforge.net/tech/node98.html](http://qucs.sourceforge.net/tech/node98.html)
 - Building MDF files from multiple S2P files: [https://youtu.be/q1ixcb\_mgeM](https://youtu.be/q1ixcb_mgeM), [https://github.com/KJ7NLL/mdf/](https://github.com/KJ7NLL/mdf/)
 - Optimizing amplifer impedance match circuits with MDF files: [https://youtu.be/nx2jy7EHzxw](https://youtu.be/nx2jy7EHzxw)
 - MDF file format: [https://awrcorp.com/download/faq/english/docs/users\_guide/data\_file\_formats.html#i489154](https://awrcorp.com/download/faq/english/docs/users_guide/data_file_formats.html#i489154)

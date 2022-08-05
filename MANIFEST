@@ -13,6 +13,9 @@ t/00-load.t
 t/01-snp-tests.t
 t/02-snp-read.t
 t/03-read-test-data.t
+t/04-yparams.t
+t/05-zparams.t
+t/06-aparams.t
 t/manifest.t
 t/pod-coverage.t
 t/pod.t
