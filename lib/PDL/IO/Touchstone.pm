@@ -933,6 +933,10 @@ is represente as either:
 
 =item MDF file format: L<https://awrcorp.com/download/faq/english/docs/users_guide/data_file_formats.html#i489154>
 
+=item "Conversions Between S, Z, Y, h, ABCD, and T Parameters which are Valid
+for Complex Source and Load Impedances" March 1994 IEEE Transactions on
+Microwave Theory and Techniques 42(2):205 - 211 L<https://www.researchgate.net/publication/3118645>
+
 =back
 
 =head1 AUTHOR

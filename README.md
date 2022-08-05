@@ -188,6 +188,9 @@ is represente as either:
 - Building MDF files from multiple S2P files: [https://youtu.be/q1ixcb\_mgeM](https://youtu.be/q1ixcb_mgeM), [https://github.com/KJ7NLL/mdf/](https://github.com/KJ7NLL/mdf/)
 - Optimizing amplifer impedance match circuits with MDF files: [https://youtu.be/nx2jy7EHzxw](https://youtu.be/nx2jy7EHzxw)
 - MDF file format: [https://awrcorp.com/download/faq/english/docs/users\_guide/data\_file\_formats.html#i489154](https://awrcorp.com/download/faq/english/docs/users_guide/data_file_formats.html#i489154)
+- "Conversions Between S, Z, Y, h, ABCD, and T Parameters which are Valid
+for Complex Source and Load Impedances" March 1994 IEEE Transactions on
+Microwave Theory and Techniques 42(2):205 - 211 [https://www.researchgate.net/publication/3118645](https://www.researchgate.net/publication/3118645)
 
 # AUTHOR
 
