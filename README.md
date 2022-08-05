@@ -1,6 +1,6 @@
 # NAME
 
-PDL::IO::Touchstone 
+PDL::IO::Touchstone - Read and manipulate Touchstone .s2p (and .sNp) files.
 
 # DESCRIPTION
 

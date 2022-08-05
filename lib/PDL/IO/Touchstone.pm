@@ -658,7 +658,7 @@ __END__
 
 =head1 NAME
 
-PDL::IO::Touchstone 
+PDL::IO::Touchstone - Read and manipulate Touchstone .s2p (and .sNp) files.
 
 =head1 DESCRIPTION
 
