@@ -9,7 +9,7 @@ on:
   create:
 
 env:
-  IRC_REPO_OWNER: 'moocow-the-bovine'
+  IRC_REPO_OWNER: 'KJ7LNW'
 
 jobs:
   notify:
