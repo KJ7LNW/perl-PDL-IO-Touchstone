@@ -4,14 +4,9 @@ use warnings;
 use ExtUtils::MakeMaker;
 
 my %REQUIRES = (
-	'Carp'                =>  '0',      #  1.42
-	'constant'            =>  '0',      #  1.33
-	'Exporter'            =>  '0',      #  5.72
 	'PDL'                 =>  '2.080',
 	'PDL::Constants'      =>  '0',
 	'PDL::LinearAlgebra'  =>  '0',
-	'PDL::LinearAlgebra'  =>  '0',
-	'PDL::Ops'            =>  '0',
     );
 
 my %WriteMakefileArgs = (
