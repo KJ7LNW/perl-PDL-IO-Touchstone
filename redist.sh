@@ -12,4 +12,4 @@ if [ -n "$(git status -s)" ]; then
 	exit 1
 fi
 
-perl Makefile.PL && make && make test && make distcheck && make dist
+./remake.sh
