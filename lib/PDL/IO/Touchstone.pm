@@ -30,7 +30,6 @@ use Carp;
 
 use PDL;
 use PDL::LinearAlgebra;
-use PDL::Ops;
 use PDL::Constants qw(PI);
 
 use constant RAD2DEG => 180/PI;
