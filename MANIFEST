@@ -1,3 +1,5 @@
+.github/workflows/ci.yml
+.github/workflows/issue-notify.yml
 Changes
 LICENSE
 MANIFEST
