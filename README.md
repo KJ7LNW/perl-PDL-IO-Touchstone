@@ -181,6 +181,27 @@ is represented as either:
 - `$z0`: Charectaristic impedance (see above).
 - `$S`: The resultant S-paramter matrix
 
+# S-Paramter Calculaction Functions
+
+All functions prefixed with "s\_" require an S-parameter matrix.
+
+## `$z0n = s_port_z($S, $z0, $n)` - Return the complex port impedance vector for all frequencies given:
+
+- - `$S`: S paramter matrix
+- - `$z0`: vector of \_reference\_ impedances at each port (from `rsnp`)
+- - `$n`: the port we want.
+
+In a 2-port, this will provide the input or output impedance as follows:
+
+    $z_in  = s_port_z($S, 50, 1);
+    $z_out = s_port_z($S, 50, 2);
+
+# Helper Functions
+
+## `$n = n_ports($S)` - return the number of ports represented by the matrix.
+
+Given any matrix (N,N,M) formatted matrix, this function will return N.
+
 # SEE ALSO
 
 - Touchstone specification: [https://ibis.org/connector/touchstone\_spec11.pdf](https://ibis.org/connector/touchstone_spec11.pdf)
