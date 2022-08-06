@@ -41,6 +41,8 @@ BEGIN {
 	our @ISA = ( @ISA, qw(Exporter) );
 	our @EXPORT = qw/rsnp wsnp/;
 	our @EXPORT_OK = qw/
+		n_ports
+
 		s_to_y
 		y_to_s
 
@@ -49,6 +51,8 @@ BEGIN {
 
 		s_to_abcd
 		abcd_to_s
+
+		s_port_z
 		/;
 }
 
@@ -205,7 +209,7 @@ sub wsnp_fh
 {
 	my ($fd, $f, $m, $param_type, $z0, $comments, $fmt, $from_hz, $to_hz) = @_;
 
-	my $n_ports = _n_ports($m);
+	my $n_ports = n_ports($m);
 	my $n_freqs = $f->nelem;
 
 	# Assume $f frequencies are in Hz if from_hz is not defined
@@ -371,7 +375,7 @@ sub s_to_y
 {
 	my ($S, $z0) = @_;
 
-	my $n_ports = _n_ports($S);
+	my $n_ports = n_ports($S);
 
 	$z0 = pdl $z0 if (!ref($z0));
 
@@ -393,7 +397,7 @@ sub y_to_s
 {
 	my ($Y, $z0) = @_;
 
-	my $n_ports = _n_ports($Y);
+	my $n_ports = n_ports($Y);
 
 	$z0 = pdl $z0 if (!ref($z0));
 
@@ -417,7 +421,7 @@ sub s_to_z
 	#eval {$Z = $Y->minv };
 	#return $Z;
 
-	my $n_ports = _n_ports($S);
+	my $n_ports = n_ports($S);
 
 	$z0 = pdl $z0 if (!ref($z0));
 
@@ -436,7 +440,7 @@ sub z_to_s
 {
 	my ($Z, $z0) = @_;
 
-	my $n_ports = _n_ports($Z);
+	my $n_ports = n_ports($Z);
 
 	$z0 = pdl $z0 if (!ref($z0));
 
@@ -458,7 +462,7 @@ sub s_to_abcd
 {
 	my ($S, $z0) = @_;
 
-	my $n_ports = _n_ports($S);
+	my $n_ports = n_ports($S);
 
 	croak "A-matrix transforms only work with 2-port matrices" if $n_ports != 2;
 
@@ -508,7 +512,7 @@ sub abcd_to_s
 {
 	my ($ABCD, $z0) = @_;
 
-	my $n_ports = _n_ports($ABCD);
+	my $n_ports = n_ports($ABCD);
 
 	croak "A-matrix transforms only work with 2-port matrices" if $n_ports != 2;
 
@@ -546,10 +550,34 @@ sub abcd_to_s
 		);
 }
 
+###############################################################################
+#                                                      S-Parameter Calculations
+
+# Return the complex port impedance vector for all frequencies given:
+#   - $S: S paramter matrix
+#   - $z0: vector impedances at each port
+#   - $port: the port we want.
+#
+# In a 2-port, this will provide the input or output impedance as follows:
+#   $z_in  = s_port_z($S, 50, 1);
+#   $z_out = s_port_z($S, 50, 2);
+sub s_port_z
+{
+	my ($S, $z0, $port) = @_;
+
+	my $n_ports = n_ports($S);
+
+	$z0 = _to_diagonal($z0, $n_ports);
+
+	my $z_port = _pos_vec($z0, $port, $port);
+	my $s_port = _pos_vec($S, $port, $port);
+
+	return $z_port * ( (1+$s_port) / (1-$s_port) );
+}
 
 # Return the number of ports in an (N,N,M) matrix where N is the port 
 # count and M is the number of frequencies.
-sub _n_ports
+sub n_ports
 {
 	my $m = shift;
 
@@ -610,6 +638,27 @@ sub _pos_vecs_to_m
 	return cat(@veclist)->transpose->reshape($n,$n,$m)
 }
 
+# Return the position vector at (i,j).
+# Note that i,j start at 1 so this is the first element:
+# 	$s11 = _pos_vec($S, 1, 1)
+sub _pos_vec
+{
+	my ($m, $i, $j) = @_;
+
+	my $n_ports = n_ports($m);
+
+	croak "position indexes start at 1: i=$i j=$j" if $i < 1 || $j < 1;
+	croak "requested position index than the matrix: i=$i > $n_ports" if ($i> $n_ports);
+	croak "requested position index than the matrix: j=$j > $n_ports" if ($j> $n_ports);
+
+	my @pos_vecs = _m_to_pos_vecs($m);
+
+	# Expect port numbers like (1,1) or (2,1) but perl expects indexes at 0:
+	$i--;
+	$j--;
+
+	return $pos_vecs[$i * $n_ports + $j];
+}
 
 # Create a diagonal matrix of size n from a scalar or vector $v.
 #
@@ -917,6 +966,33 @@ is represented as either:
 =item * C<$S>: The resultant S-paramter matrix
 
 =back
+
+=head1 S-Paramter Calculaction Functions
+
+All functions prefixed with "s_" require an S-parameter matrix.
+
+=head2 C<$z0n = s_port_z($S, $z0, $n)> - Return the complex port impedance vector for all frequencies given:
+
+=over 4
+
+=item - C<$S>: S paramter matrix
+
+=item - C<$z0>: vector of _reference_ impedances at each port (from C<rsnp>)
+
+=item - C<$n>: the port we want.
+
+=back
+
+In a 2-port, this will provide the input or output impedance as follows:
+
+    $z_in  = s_port_z($S, 50, 1);
+    $z_out = s_port_z($S, 50, 2);
+
+=head1 Helper Functions
+
+=head2 C<$n = n_ports($S)> - return the number of ports represented by the matrix.
+
+Given any matrix (N,N,M) formatted matrix, this function will return N.
 
 
 =head1 SEE ALSO
