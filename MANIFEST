@@ -1,6 +1,7 @@
 Changes
 LICENSE
 MANIFEST
+Makefile.PL
 README
 README.md
 lib/PDL/IO/Touchstone.pm
