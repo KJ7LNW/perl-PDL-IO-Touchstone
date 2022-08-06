@@ -10,6 +10,7 @@ ignore.txt
 lib/PDL/IO/Touchstone.pm
 rebuild-manifest.sh
 redist.sh
+remake.sh
 repod.sh
 t/00-load.t
 t/01-snp-tests.t
