@@ -7,7 +7,7 @@ use PDL;
 use PDL::IO::Touchstone qw/rsnp s_to_abcd abcd_to_s /;
 use File::Temp qw/tempfile/;
 
-use Test::More tests => 6;
+use Test::More tests => 8;
 
 my $tolerance = 1e-6;
 
@@ -18,6 +18,7 @@ opendir(my $dir, $datadir) or die "$datadir: $!";
 my @files = map { "$datadir/$_" } grep { /\.s2p$/i } readdir($dir);
 closedir($dir);
 
+@files = grep { !/IDEAL_OPEN/ } @files;
 
 # real examples:
 my $S = pdl [

@@ -7,7 +7,7 @@ use PDL;
 use PDL::IO::Touchstone qw/rsnp s_to_y y_to_s /;
 use File::Temp qw/tempfile/;
 
-use Test::More tests => 8;
+use Test::More tests => 10;
 
 # Cumulative error in PDL-to-perl-scalar conversion for long-double builds
 # requires a lower tolerance.  To prevent failing builds just because of
@@ -27,6 +27,8 @@ opendir(my $dir, $datadir) or die "$datadir: $!";
 
 my @files = grep { /\.s\d+p$/i } readdir($dir);
 closedir($dir);
+
+@files = grep { !/IDEAL_SHORT/ } @files;
 
 # real examples:
 my $S = pdl [

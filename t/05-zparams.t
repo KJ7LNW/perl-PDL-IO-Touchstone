@@ -18,6 +18,8 @@ opendir(my $dir, $datadir) or die "$datadir: $!";
 my @files = map { "$datadir/$_" } grep { /\.s\d+p$/i } readdir($dir);
 closedir($dir);
 
+@files = grep { !/IDEAL_OPEN|IDEAL_SHORT/ } @files;
+
 my $S = pdl [
     [
       [-0.00905768436807254 + i() *-0.339113546247171, -0.00126603635690153 + i() * 0.00115240842944411],
