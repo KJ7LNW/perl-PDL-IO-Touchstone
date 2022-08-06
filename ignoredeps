@@ -1,0 +1,5 @@
+'Carp' => '0',	# 1.42
+'Exporter' => '0',	# 5.72
+'PDL::Ops' => '0',	# undef
+'constant' => '0',	# 1.33
+
