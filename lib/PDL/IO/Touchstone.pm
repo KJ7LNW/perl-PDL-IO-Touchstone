@@ -52,6 +52,25 @@ BEGIN {
 		abcd_to_s
 
 		s_port_z
+
+		y_inductance
+		y_ind_nH
+		y_resistance
+		y_capacitance
+		y_cap_pF
+		y_q_factor
+		y_reactance_l
+		y_reactance_c
+		y_reactance
+		y_srf
+		y_parallel
+		abcd_serial
+		abcd_is_lossless
+		abcd_is_symmetrical
+		abcd_is_reciprocal
+		abcd_is_open_circuit
+		abcd_is_short_circuit
+
 		/;
 }
 
@@ -471,10 +490,6 @@ sub s_to_abcd
 	my $z01 = $Z_ref->slice(0,0)->reshape(1);
 	my $z02 = $Z_ref->slice(1,1)->reshape(1);
 
-	$z01 = pdl($z01) if (!ref($z01));
-	$z02 //= $z01;
-	$z02 = pdl($z02) if (!ref($z02));
-
 	my $z01_conj = $z01->conj;
 	my $z02_conj = $z02->conj;
 
@@ -484,6 +499,21 @@ sub s_to_abcd
 	# "Conversions Between S, Z, Y, h, ABCD, and T Parameters
 	#   which are Valid for Complex Source and Load Impedances"
 	# March 1994 IEEE Transactions on Microwave Theory and Techniques 42(2):205 - 211
+
+	# If this needs to be optimized in the future then:
+	# 	1. Factor out the divisor
+	# 	2. Separate each segment into its multiplicative or additive term
+	# 	3. Use PDL magic to compose elements with multiplication and addition.
+	#
+	# 	For example, the first multiplicative term (I think) becomes:
+	# 		$ABCD_part_1 = (
+	# 		    pdl([ [$z01_conj, $z01_conj],
+	# 			  [1        , 1] ])
+	# 			+ $S->slice(0,0) * pdl( [ [$z01, $z01],
+	# 			                            [-1, -1] ])
+	#		)
+	#
+	#	see https://m.perl.bot/p/qycs8z
 	return _pos_vecs_to_m(
 			# A
 			(($z01_conj + $S11*$z01) * (1 - $S22) + $S12*$S21*$z01)
@@ -574,6 +604,253 @@ sub s_port_z
 	return $z_port * ( (1+$s_port) / (1-$s_port) );
 }
 
+###############################################################################
+#                                                      Y-Parameter Calculations
+
+# Return a vector of inductance for each frequency in Henrys (H):
+# $Y - the Y parameter matrix (N,N,M)
+# $f_hz - a vector of frequencies (M)
+sub y_inductance
+{
+	my ($Y, $f_hz) = @_;
+
+	my $y12 = _pos_vec($Y, 1, 2);
+
+	return -(1/$y12)->im / (2*PI*$f_hz);
+}
+
+# Return a vector of inductance for each frequency in nH:
+sub y_ind_nH { return inductance(@_) * 1e9; }
+
+# Return ESR in Ohms:
+# $Y - the Y parameter matrix (N,N,M)
+sub y_resistance
+{
+	my ($Y) = @_;
+
+	my $y12 = _pos_vec($Y, 1, 2);
+
+	return -1/$y12->re;
+}
+
+
+# Return a vector of capacitance for each frequency in Farads (F):
+# $Y - the Y parameter matrix (N,N,M)
+# $f_hz - a vector of frequencies (M)
+sub y_capacitance
+{
+	my ($Y, $f_hz) = @_;
+
+	my $y11 = _pos_vec($Y, 1, 1);
+
+	return $y11->im / (2*PI*$f_hz);
+}
+
+# Return a vector of capacitance it each frequency in picofarads (pF):
+sub y_cap_pF { return y_capacitance(@_) * 1e12; }
+
+# Return a vector of Q-factor for each frequency:
+# $Y - the Y parameter matrix (N,N,M)
+# $f_hz - a vector of frequencies (M)
+sub y_q_factor
+{
+	my ($Y, $f_hz) = @_;
+
+	return (2*PI*$f_hz) * (y_inductance($Y, $f_hz) / y_resistance($Y, $f_hz))
+}
+
+# Return a vector of inductive reactance for each frequency:
+# $Y - the Y parameter matrix (N,N,M)
+# $f_hz - a vector of frequencies (M)
+sub y_reactance_l
+{
+	my ($Y, $f_hz) = @_;
+
+	return 2*PI*$f_hz*y_inductance($Y, $f_hz);
+}
+
+# Return a vector of capacitive reactance for each frequency:
+# $Y - the Y parameter matrix (N,N,M)
+# $f_hz - a vector of frequencies (M)
+sub y_reactance_c
+{
+	my ($Y, $f_hz) = @_;
+
+	return 1.0/(2*PI*$f_hz*y_capacitance($Y, $f_hz));
+}
+
+# Return a vector of total reactance for each frequency:
+# $Y - the Y parameter matrix (N,N,M)
+# $f_hz - a vector of frequencies (M)
+sub y_reactance
+{
+	my ($Y, $f_hz) = @_;
+
+	return y_reactance_l($Y, $f_hz) - y_reactance_c($Y, $f_hz);
+}
+
+# srf: Self-resonating frequency.
+#
+# This may not be accurate.  While the equasion is a classic
+# SRF calculation (1/(2*pi*sqrt(LC)), srf should scan the frequency lines as follows:
+#    "The SRF is determined to be the frequency at which the insertion (S21)
+#    phase changes from negative through zero to positive."
+#    [ https://www.coilcraft.com/getmedia/8ef1bd18-d092-40e8-a3c8-929bec6adfc9/doc363_measuringsrf.pdf ]
+#
+# $Y - the Y parameter matrix (N,N,M)
+# $f_hz - a vector of frequencies (M)
+sub y_srf
+{
+	my ($Y, $f_hz) = @_;
+
+	return 1/sqrt( abs 2*PI*y_inductance($Y, $f_hz)*y_capacitance($Y, $f_hz));
+}
+
+# Return a parallel representation from a list of (N,N,M) Y-Parameters
+#
+# @yparams: a list of (N,N,M) piddles
+#
+# Note: each yparam must be compatible in that:
+#   1. The number of frequencies of each must be the same
+#   2. The frequency values must correspond because inter-frequency
+#      interpolation is _not_ performed.
+#
+# For example, if you have the Y parameters for two capacitors $C1_y and $C2_y
+# at 100pF then in parallel you will get a 200pF capacitor:
+#
+#   $C_parallel_y = y_parallel($C1_y, $C2_y);
+# and thus:
+#   200 == y_cap_pF($C_parallel_y)
+sub y_parallel
+{
+	my @yparams = @_;
+
+	my $ret;
+	foreach my $y (@yparams)
+	{
+		if (!defined $ret)
+		{
+			$ret = $y;
+		}
+		else
+		{
+			$ret += $y;
+		}
+	}
+
+	return $ret;
+}
+
+###############################################################################
+#                                                   ABCD-Parameter Calculations
+
+# Return a serial representation from a list of (N,N,M) ABCD-Parameters
+#
+# @abcd_params: a list of (N,N,M) piddles
+#
+# Note: each abcd_param must be compatible in that:
+#   1. The number of frequencies of each must be the same
+#   2. The frequency values must correspond because inter-frequency
+#      interpolation is _not_ performed.
+#
+# For example, if you have the ABCD parameters for two capacitors $C1_y and
+# $C2_y at 100pF then in serial you will get a 50pF capacitor:
+#
+#   $C_serial_abcd = abcd_serial($C1_abcd, $C2_abcd);
+# and thus:
+#   50 == y_cap_pF($C_serial_abcd)
+sub abcd_serial
+{
+	my @abcd_params = @_;
+
+	my $ret;
+	foreach my $abcd (@abcd_params)
+	{
+		if (!defined $ret)
+		{
+			$ret = $abcd
+		}
+		else
+		{
+			$ret = $ret x $abcd;
+		}
+	}
+
+	return $ret;
+}
+
+sub abcd_is_lossless
+{
+	my ($ABCD, $tolerance) = @_;
+
+	my ($A, $B, $C, $D) = _m_to_pos_vecs($ABCD);
+
+	# How small should Im/Re be to be considered zero?
+	$tolerance //= 1e-6;
+
+	# Lossless when diagonal elements are purely Real and off-diagonal are
+	# purely imaginary: https://youtu.be/rfbvmGwN_8o
+	return (abs(Im($A)) < $tolerance && abs(Im($D)) < $tolerance
+		&& abs(Re($B)) < $tolerance && abs(Re($C)) < $tolerance);
+}
+
+# See reference for symmetrical, reciprocal, open_circuit, short_circuit:
+# https://resources.system-analysis.cadence.com/blog/msa2021-abcd-parameters-of-transmission-lines
+sub abcd_is_symmetrical
+{
+	my ($ABCD, $tolerance) = @_;
+
+	my ($A, $B, $C, $D) = _m_to_pos_vecs($ABCD);
+
+	# How small should Im/Re be to be considered zero?
+	$tolerance //= 1e-6;
+
+	# A =~ D:
+	return abs($A - $D) < $tolerance;
+}
+
+sub abcd_is_reciprocal
+{
+	my ($ABCD, $tolerance) = @_;
+
+	my ($A, $B, $C, $D) = _m_to_pos_vecs($ABCD);
+
+	# How small should Im/Re be to be considered zero?
+	$tolerance //= 1e-6;
+
+	# AD-BC=1
+	return abs($ABCD->det()) < $tolerance;
+}
+
+sub abcd_is_open_circuit
+{
+	my ($ABCD, $tolerance) = @_;
+
+	my ($A, $B, $C, $D) = _m_to_pos_vecs($ABCD);
+
+	# How small should Im/Re be to be considered zero?
+	$tolerance //= 1e-6;
+
+	# A=C=0
+	return (abs($A) < $tolerance && abs($C) < $tolerance);
+}
+
+sub abcd_is_short_circuit
+{
+	my ($ABCD, $tolerance) = @_;
+
+	my ($A, $B, $C, $D) = _m_to_pos_vecs($ABCD);
+
+	# How small should Im/Re be to be considered zero?
+	$tolerance //= 1e-6;
+
+	# B=D=0
+	return (abs($B) < $tolerance && abs($D) < $tolerance);
+}
+
+###############################################################################
+#                                                       Public Helper Functions
+
 # Return the number of ports in an (N,N,M) matrix where N is the port 
 # count and M is the number of frequencies.
 sub n_ports
@@ -586,6 +863,9 @@ sub n_ports
 
 	return $dims[0];
 }
+
+###############################################################################
+#                                                      Private Helper Functions
 
 # Return the number of measurements in the n,n,m pdl:
 # This value will be equal to the number of frequencies:
@@ -616,6 +896,7 @@ sub _n_meas
 # 	$T21 = ...
 # 	$T22 = ...
 #
+# @sivoais on irc.perl.org/#pdl calls these "index slices":
 sub _m_to_pos_vecs
 {
 	my $m = shift;
