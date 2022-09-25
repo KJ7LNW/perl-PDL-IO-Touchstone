@@ -199,7 +199,8 @@ sub rsnp
 		$c->[1] = pdl $c->[1];
 	}
 
-	my $m = _cols_to_matrix($fmt, \@cols);
+	my @cx_cols = _cols_to_complex_cols($fmt, \@cols);
+	my $m = _complex_cols_to_matrix(@cx_cols);
 
 	my $funit = $args->{units} || 'Hz';
 	my $f = _si_scale_hz($orig_funit, $funit, pdl \@f);
@@ -329,14 +330,12 @@ sub wsnp_fh
 }
 
 # https://physics.stackexchange.com/questions/398988/converting-magnitude-ratio-to-complex-form
-sub _cols_to_matrix
+sub _cols_to_complex_cols
 {
 	my ($fmt, $cols) = @_;
 
 	$fmt = lc $fmt;
 	my @cx;
-	my $n = $cols->[0][0]->nelem;
-	my $n_ports = sqrt(scalar @$cols);
 
 	foreach my $c (@$cols)
 	{
@@ -360,6 +359,16 @@ sub _cols_to_matrix
 			croak "Unknown s-parameter format: $fmt";
 		}
 	}
+
+	return @cx;
+}
+
+sub _complex_cols_to_matrix
+{
+	my @cx = @_;
+
+	my $n = $cx[0]->nelem;
+	my $n_ports = sqrt(scalar @cx);
 
 	my $m = pdl \@cx;
 	$m = $m->mv(0, -1)->reshape($n_ports,$n_ports,$n);
