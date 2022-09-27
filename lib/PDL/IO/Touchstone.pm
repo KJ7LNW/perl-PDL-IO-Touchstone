@@ -193,17 +193,54 @@ sub rsnp
 		$cols[1] = $t;
 	}
 
+	# Convert input columns to PDLs
 	foreach my $c (@cols)
 	{
 		$c->[0] = pdl $c->[0];
 		$c->[1] = pdl $c->[1];
 	}
 
+	# Convert from R/I formats to native complex:
 	my @cx_cols = _cols_to_complex_cols($fmt, \@cols);
-	my $m = _complex_cols_to_matrix(@cx_cols);
 
+	# Scale frequency unit:
 	my $funit = $args->{units} || 'Hz';
 	my $f = _si_scale_hz($orig_funit, $funit, pdl \@f);
+
+	# Interpolate frequency range and input data:
+	if (defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count})
+	{
+		if ($args->{freq_min_hz} >= $args->{freq_max_hz})
+		{
+			croak "freq_min_hz=$args->{freq_min_hz} !< freq_max_hz=$args->{freq_max_hz}"
+		}
+
+		my $freq_step = ($args->{freq_max_hz} - $args->{freq_min_hz}) / ($args->{freq_count} - 1);
+		my $f_new = sequence($args->{freq_count}) * $freq_step + $args->{freq_min_hz};
+
+		# Scale the frequency unit to those requested by the caller:
+		$f_new = _si_scale_hz('Hz', $funit, $f_new);
+
+		my @cx_cols_new;
+		foreach my $cx (@cx_cols)
+		{
+			my ($cx_new, $err) = interpolate($f_new, $f, $cx);
+			if (any $err != 0)
+			{
+				carp "Frequency range for interpolation is below/beyond reference frequencies."
+			}
+			push @cx_cols_new, $cx_new;
+		}
+
+		@cx_cols = @cx_cols_new;
+		$f = $f_new;
+	}
+	elsif (defined $args->{freq_min_hz} || defined $args->{freq_max_hz} || defined $args->{freq_count})
+	{
+		croak("If any of freq_min_hz, freq_max_hz, or freq_count are defined then all must be defined.");
+	}
+
+	my $m = _complex_cols_to_matrix(@cx_cols);
 
 	return ($f, $m, $param_type, $z0, $comments, $fmt, $funit, $orig_funit);
 }
@@ -378,6 +415,11 @@ sub _si_scale_hz
 {
 	my ($from, $to, $n) = @_;
 
+	$from = lc $from;
+	$to = lc $to;
+
+	return $n if $from eq $to;
+
 	my %scale = 
 	(
 		hz => 1,
@@ -387,8 +429,8 @@ sub _si_scale_hz
 		thz => 1e12,
 	);
 
-	$from = $scale{lc($from)};
-	$to = $scale{lc($to)};
+	$from = $scale{$from};
+	$to = $scale{$to};
 
 	my $fscale = $from/$to;
 
