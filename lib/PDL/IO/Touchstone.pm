@@ -41,6 +41,9 @@ BEGIN {
 	our @EXPORT = qw/rsnp wsnp/;
 	our @EXPORT_OK = qw/
 		n_ports
+		m_interpolate
+		f_uniformity
+		f_is_uniform
 
 		s_to_y
 		y_to_s
@@ -207,40 +210,9 @@ sub rsnp
 	my $funit = $args->{units} || 'Hz';
 	my $f = _si_scale_hz($orig_funit, $funit, pdl \@f);
 
-	# Interpolate frequency range and input data:
-	if (defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count})
-	{
-		if ($args->{freq_min_hz} >= $args->{freq_max_hz})
-		{
-			croak "freq_min_hz=$args->{freq_min_hz} !< freq_max_hz=$args->{freq_max_hz}"
-		}
-
-		my $freq_step = ($args->{freq_max_hz} - $args->{freq_min_hz}) / ($args->{freq_count} - 1);
-		my $f_new = sequence($args->{freq_count}) * $freq_step + $args->{freq_min_hz};
-
-		# Scale the frequency unit to those requested by the caller:
-		$f_new = _si_scale_hz('Hz', $funit, $f_new);
-
-		my @cx_cols_new;
-		foreach my $cx (@cx_cols)
-		{
-			my ($cx_new, $err) = interpolate($f_new, $f, $cx);
-			if (any $err != 0)
-			{
-				carp "Frequency range for interpolation is below/beyond reference frequencies."
-			}
-			push @cx_cols_new, $cx_new;
-		}
-
-		@cx_cols = @cx_cols_new;
-		$f = $f_new;
-	}
-	elsif (defined $args->{freq_min_hz} || defined $args->{freq_max_hz} || defined $args->{freq_count})
-	{
-		croak("If any of freq_min_hz, freq_max_hz, or freq_count are defined then all must be defined.");
-	}
-
 	my $m = _complex_cols_to_matrix(@cx_cols);
+
+	($f, $m) = m_interpolate($f, $m, $args);
 
 	return ($f, $m, $param_type, $z0, $comments, $fmt, $funit, $orig_funit);
 }
@@ -915,6 +887,85 @@ sub n_ports
 	return $dims[0];
 }
 
+# Given a PDL of frequencies and a N,N,M piddle of X-parameters, re-scale
+# and return $m based on $args.
+sub m_interpolate
+{
+	my ($f, $m, $args) = @_;
+
+	croak "caller must expect an array!" if !wantarray;
+
+	# Interpolate frequency range and input data:
+	if (defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count})
+	{
+		if ($args->{freq_min_hz} >= $args->{freq_max_hz})
+		{
+			croak "freq_min_hz=$args->{freq_min_hz} !< freq_max_hz=$args->{freq_max_hz}"
+		}
+
+		my $freq_step = ($args->{freq_max_hz} - $args->{freq_min_hz}) / ($args->{freq_count} - 1);
+		my $f_new = sequence($args->{freq_count}) * $freq_step + $args->{freq_min_hz};
+
+		# Scale the frequency unit to those requested by the caller:
+		my $funit = $args->{units} || 'Hz';
+		$f_new = _si_scale_hz('Hz', $funit, $f_new);
+
+		my @cx_cols = _m_to_pos_vecs($m);
+		my @cx_cols_new;
+		foreach my $cx (@cx_cols)
+		{
+			my ($cx_new, $err) = interpolate($f_new, $f, $cx);
+			if (!$args->{quiet} && any $err != 0)
+			{
+				carp "Frequency range for interpolation is below/beyond reference frequencies."
+			}
+			push @cx_cols_new, $cx_new;
+		}
+
+		return ($f_new, _pos_vecs_to_m(@cx_cols_new));
+	}
+	elsif (defined $args->{freq_min_hz} || defined $args->{freq_max_hz} || defined $args->{freq_count})
+	{
+		croak("If any of freq_min_hz, freq_max_hz, or freq_count are defined then all must be defined.");
+	}
+	else
+	{
+		# Do nothing, just return the original values.
+		return ($f, $m);
+	}
+}
+
+# Return the maximum difference between an ideal uniformally-spaced frequency set
+# and the frequency set provided.  For example:
+#   $f = [ 1, 2, 3  , 4 ] would return 0.0
+#   $f = [ 1, 2, 2.5, 4 ] would return 0.5
+sub f_uniformity
+{
+	my ($f) = @_;
+
+	my $f_min = $f->slice(0);
+	my $f_max = $f->slice(-1);
+	my $f_count = $f->nelem;
+
+	my $f_step = ($f_max - $f_min) / ($f_count-1);
+
+	my $f_new = sequence($f_count) * $f_step + $f_min;
+
+	return max(abs($f-$f_new));
+}
+
+# Return true if the provided frequency set is uniform within a Hz value.
+# We assume $f is provided in Hz, so adjust $tolerance_hz accordingly if
+# $f is in a different unit.
+sub f_is_uniform
+{
+	my ($f, $tolerance_hz) = @_;
+
+	$tolerance_hz //= 1;
+
+	return f_uniformity($f) < $tolerance_hz;
+}
+
 ###############################################################################
 #                                                      Private Helper Functions
 
@@ -1094,12 +1145,23 @@ parameter types (or impedances).  Use the C<P_to_Q()> functions below to transfo
 
 =item * $filename - the file to read
 
-=item * $options - A hashref of options.
+=item * $options - A hashref of options:
 
-Currently only 'units' is supported, which may specify one of Hz, KHz, MHz,
-GHz, or THz.  The resulting C<$f> vector will be scaled to the frequency format
-you specify.  If you do not specify a format then C<$f> will be scaled to Hz
-such that a value of 1e6 in the C<$f> vector is equal to 1 MHz.
+=over 4
+
+=item units: Hz, KHz, MHz, GHz, or THz.
+
+Units may specify one of Hz, KHz, MHz, GHz, or THz.  The resulting C<$f> vector
+will be scaled to the frequency format you specify.  If you do not specify a
+format then C<$f> will be scaled to Hz such that a value of 1e6 in the C<$f>
+vector is equal to 1 MHz.
+
+=item freq_min_hz, freq_max_hz, freq_count: see C<m_interpolate()>
+
+If these options are passed then the matrix (C<$m>) and frequency (C<$f>) PDLs
+returned by C<rsnp()> will have been interpolated by C<m_interpolate()>.
+
+=back
 
 =back
 
@@ -1302,7 +1364,7 @@ is represented as either:
 
 All functions prefixed with "s_" require an S-parameter matrix.
 
-=head2 C<$z0n = s_port_z($S, $z0, $n)> - Return the complex port impedance vector for all frequencies given:
+=head2 C<$z0n = s_port_z($S, $z0, $n)> - Return the complex port impedance vector for each frequency
 
 =over 4
 
@@ -1319,12 +1381,57 @@ In a 2-port, this will provide the input or output impedance as follows:
     $z_in  = s_port_z($S, 50, 1);
     $z_out = s_port_z($S, 50, 2);
 
+Note that C<$z_in> and C<$z_out> are the PDL vectors for the input or output
+impedance at each frequency in C<$f>.  (NB, C<$f> is not actually needed for
+the calculation.)
+
 =head1 Helper Functions
 
 =head2 C<$n = n_ports($S)> - return the number of ports represented by the matrix.
 
 Given any matrix (N,N,M) formatted matrix, this function will return N.
 
+=head2 C<($f_new, $m_new) = m_interpolate($f, $m, $args)> - return the number of ports represented by the matrix.
+
+This function rescales the X-parameter matrix (C<$m>) and frequency set (C<$f>)
+to fit the requested frequency bounds.  This example will return the
+interpolated C<$S_new> and C<$f_new> with 10 frequency samples from 100 to 1000
+MHz (inclusive):
+
+    ($f_new, $S_new) = m_interpolate($f, $S,
+	{ freq_min_hz => 100e6, freq_max_hz => 1000e6, freq_count => 10,
+	  quiet => 1 # optional
+	} )
+
+This function returns C<$f> and C<$m> verbatim if no C<$args> are passed.
+
+=over 4
+
+=item * freq_min_hz: the minimum frequency at which to interpolate
+
+=item * freq_max_hz: the maximum frequency at which to interpolate
+
+=item * freq_count: the total number of frequencies sampled
+
+=item * quiet: suppress warnings when interpolating beyond the available frequency range
+
+=back
+
+=head2 C<$max_diff = f_uniformity($f)> - Return maximum frequency deviation.
+
+Return the maximum difference between an ideal uniformally-spaced frequency set
+and the frequency set provided.  This is used internally by C<f_is_uniform()>.
+For example:
+
+  0.0 == f_uniformity(pdl [ 1, 2, 3  , 4 ]);
+  0.5 == f_uniformity(pdl [ 1, 2, 2.5, 4 ]);
+
+
+=head2 C<$bool = f_is_uniform($f, $tolerance_hz)> - Return true if the frequency set is uniform
+
+Return true if the provided frequency set is uniform within a Hz value.
+We assume C<$f> is provided in Hz, so adjust C<$tolerance_hz> accordingly if
+$f is in a different unit.
 
 =head1 SEE ALSO
 
