@@ -35,7 +35,7 @@ use PDL::Constants qw(PI);
 use constant RAD2DEG => 180/PI;
 use constant DEG2RAD => PI/180;
 
-BEGIN {  
+BEGIN {
 	use Exporter;
 	our @ISA = ( @ISA, qw(Exporter) );
 	our @EXPORT = qw/rsnp wsnp/;
@@ -61,13 +61,14 @@ BEGIN {
 		y_resistance
 		y_capacitance
 		y_cap_pF
-		y_q_factor
+		y_qfactor_l
+		y_qfactor_c
 		y_reactance_l
 		y_reactance_c
 		y_reactance
 		y_srf
 		y_parallel
-		abcd_serial
+		abcd_series
 		abcd_is_lossless
 		abcd_is_symmetrical
 		abcd_is_reciprocal
@@ -145,7 +146,7 @@ sub rsnp
 		# If the line has an odd number of elements then the first is the frequency
 		# because data lines are always in pairs:
 		if (scalar(@params) % 2)
-		{ 
+		{
 			$row_idx++;
 
 			if ($row_idx > 0)
@@ -176,7 +177,7 @@ sub rsnp
 		for (my $i = 0; $i < @params; $i += 2)
 		{
 			# The data format could be ri, ma, or db but there is
-			# always a pair of data.  Please each in its own array 
+			# always a pair of data.  Please each in its own array
 			# and we will convert the format below.
 			push @{ $cols[$col_idx]->[0] }, $params[$i];
 			push @{ $cols[$col_idx]->[1] }, $params[$i+1];
@@ -251,7 +252,7 @@ sub wsnp_fh
 	# 2-port matrixes are column-major:
 	$m = $m->transpose if ($n_ports == 2);
 
-	# Big thanks to mohawk and sivoais for helping figure out the reshape here. 
+	# Big thanks to mohawk and sivoais for helping figure out the reshape here.
 	# $d is arranged so real and imag parts can be separated into their own
 	# columns with clump() for writing to the sNp file:
 	my $d = $m->dummy(0,1);
@@ -303,7 +304,7 @@ sub wsnp_fh
 		my $freq = $f->slice("$i")->sclr;
 
 		# More than 2 ports are printed on multiple lines,
-		# at least one line for each port. 
+		# at least one line for each port.
 		if ($n_ports > 2)
 		{
 			$fm = $fm->reshape($n_ports*2,$n_ports);
@@ -392,7 +393,7 @@ sub _si_scale_hz
 
 	return $n if $from eq $to;
 
-	my %scale = 
+	my %scale =
 	(
 		hz => 1,
 		khz => 1e3,
@@ -647,14 +648,21 @@ sub y_ind_nH { return inductance(@_) * 1e9; }
 
 # Return ESR in Ohms:
 # $Y - the Y parameter matrix (N,N,M)
+# Equation from here:
+#   https://mdpi-res.com/d_attachment/electronics/electronics-11-02029/article_deploy/electronics-11-02029.pdf
+#   "Analytic Design of on-Chip Spiral Inductor with Variable Line Width"
+# See also:
+#   https://electronics.stackexchange.com/q/637472/256265
 sub y_resistance
 {
 	my ($Y) = @_;
 
 	my $y12 = _pos_vec($Y, 1, 2);
 
-	return -1/$y12->re;
+	return (-1/$y12)->re;
 }
+
+sub y_esr { return y_resistance(@_) }
 
 
 # Return a vector of capacitance for each frequency in Farads (F):
@@ -672,14 +680,44 @@ sub y_capacitance
 # Return a vector of capacitance it each frequency in picofarads (pF):
 sub y_cap_pF { return y_capacitance(@_) * 1e12; }
 
-# Return a vector of Q-factor for each frequency:
+# Return the inductive Q-factor vector for each frequency.
+# All capacitive values are zeroed.
 # $Y - the Y parameter matrix (N,N,M)
 # $f_hz - a vector of frequencies (M)
-sub y_q_factor
+#
+# $Ql = y_qfactor_l($Y, $f_hz)
+sub y_qfactor_l
 {
 	my ($Y, $f_hz) = @_;
 
-	return (2*PI*$f_hz) * (y_inductance($Y, $f_hz) / y_resistance($Y, $f_hz))
+	my $Xl = y_reactance_l($Y, $f_hz);
+
+	my $is_l = ($Xl > 0);
+
+	my $esr = y_resistance($Y);
+	my $Ql = ($is_l*$Xl)/$esr;
+
+	return $Ql;
+}
+
+# Return the capacitive Q-factor vector for each frequency.
+# All inductive values are zeroed.
+# $Y - the Y parameter matrix (N,N,M)
+# $f_hz - a vector of frequencies (M)
+#
+# $Qc = y_qfactor_c($Y, $f_hz)
+sub y_qfactor_c
+{
+	my ($Y, $f_hz) = @_;
+
+	my $Xc = y_reactance_c($Y, $f_hz);
+
+	my $is_c = ($Xc > 0);
+
+	my $esr = y_resistance($Y);
+	my $Qc = ($is_c*$Xc)/$esr;
+
+	return $Qc;
 }
 
 # Return a vector of inductive reactance for each frequency:
@@ -714,7 +752,7 @@ sub y_reactance
 
 # srf: Self-resonating frequency.
 #
-# This may not be accurate.  While the equasion is a classic
+# This may not be accurate.  While the equation is a classic
 # SRF calculation (1/(2*pi*sqrt(LC)), srf should scan the frequency lines as follows:
 #    "The SRF is determined to be the frequency at which the insertion (S21)
 #    phase changes from negative through zero to positive."
@@ -767,7 +805,7 @@ sub y_parallel
 ###############################################################################
 #                                                   ABCD-Parameter Calculations
 
-# Return a serial representation from a list of (N,N,M) ABCD-Parameters
+# Return a series representation from a list of (N,N,M) ABCD-Parameters
 #
 # @abcd_params: a list of (N,N,M) piddles
 #
@@ -777,12 +815,12 @@ sub y_parallel
 #      interpolation is _not_ performed.
 #
 # For example, if you have the ABCD parameters for two capacitors $C1_y and
-# $C2_y at 100pF then in serial you will get a 50pF capacitor:
+# $C2_y at 100pF then in series you will get a 50pF capacitor:
 #
-#   $C_serial_abcd = abcd_serial($C1_abcd, $C2_abcd);
+#   $C_series_abcd = abcd_series($C1_abcd, $C2_abcd);
 # and thus:
-#   50 == y_cap_pF($C_serial_abcd)
-sub abcd_serial
+#   50 == y_cap_pF($C_series_abcd)
+sub abcd_series
 {
 	my @abcd_params = @_;
 
@@ -874,7 +912,7 @@ sub abcd_is_short_circuit
 ###############################################################################
 #                                                       Public Helper Functions
 
-# Return the number of ports in an (N,N,M) matrix where N is the port 
+# Return the number of ports in an (N,N,M) matrix where N is the port
 # count and M is the number of frequencies.
 sub n_ports
 {
@@ -1109,7 +1147,7 @@ filters, power splitters, etc.
 
 	# Read input matrix:
 	($f, $m, $param_type, $z0, $comments, $fmt, $funit, $orig_f_unit) =
-		rsnp('input-file.s2p', { units => 'MHz' }); 
+		rsnp('input-file.s2p', { units => 'MHz' });
 
 
 	# Write output file:
@@ -1139,7 +1177,7 @@ parameter types (or impedances).  Use the C<P_to_Q()> functions below to transfo
 
 =head2 C<rsnp($filename, $options)> - Read touchstone file
 
-=head3 Arguments: 
+=head3 Arguments:
 
 =over 4
 
@@ -1176,11 +1214,11 @@ utilize the data loaded by C<rsnp()>:
 number of frequencies.
 
 =item * C<$m> - A (N,N,M) piddle of X-parameter matrices where C<N> is the number
-of ports and C<M> is the number of frequencies. 
+of ports and C<M> is the number of frequencies.
 
 These matrixes have been converted from their 2-part RI/MA/DB input format and
 are ready to perform computation.  Matrix values (S11, etc) use PDL's
-native complex values.  
+native complex values.
 
 =item * C<$param_type> - one of S, Y, Z, H, G, T, or A that indicates the
 matrix parameter type.
@@ -1192,7 +1230,7 @@ still load them with this module (but it is up to you to know how to use them).
 
 =back
 
-The remaining parameters (C<$comments>, C<$fmt>, C<$funit>) are useful only if you wish to 
+The remaining parameters (C<$comments>, C<$fmt>, C<$funit>) are useful only if you wish to
 re-create the original file format by calling C<wsnp()>:
 
 =over 4
@@ -1231,7 +1269,7 @@ same as those returned by C<rsnp()>.
 When writing it is up to you to maintain consistency between the output format
 and the data being represented.  Except for complex value representation in
 C<$fmt> and frequency scale in C<$f>, this C<PDL::IO::Touchstone> module will
-not make any mathematical transform on the matrix data. 
+not make any mathematical transform on the matrix data.
 
 Changing C<$to_hz> will modify the frequency format in the resultant Touchstone
 file, but the represented data will remain correct because Touchstone knows how
@@ -1252,7 +1290,7 @@ However, there are a few output differences that may occur:
 =item * The order of comments and the "# format" line may be changed.
 C<wsnp()> will write comments before the "# format" line.
 
-=item * Whitespace may differ in the output.  Touchstone specifies any whitespace as a 
+=item * Whitespace may differ in the output.  Touchstone specifies any whitespace as a
 field delimiter and this module uses tabs as delimiters when writing output data.
 
 =back
@@ -1384,6 +1422,73 @@ In a 2-port, this will provide the input or output impedance as follows:
 Note that C<$z_in> and C<$z_out> are the PDL vectors for the input or output
 impedance at each frequency in C<$f>.  (NB, C<$f> is not actually needed for
 the calculation.)
+
+=head1 Y-Paramter Calculaction Functions
+
+All functions prefixed with "y_" require a Y-parameter matrix.
+
+These functions are intended for use with 2-port matrices---but if you know
+what you are doing they may work for higher-order matrices as well.
+
+Unless otherwise indicated:
+
+=over 4
+
+=item * C<$Y> is a set Y-parameter matrices (one for each frequency), either  loaded directly from
+a Y-formatted .s2p file or converted via C<s_to_y> or similar functions.
+
+=item * C<$f_hz> is a vector of frequencies in Hz (one for each Y-matrix in C<$Y>).
+
+
+=head2 C<$C = y_capacitance($Y, $f_hz)> - Return a vector of capacitance for each frequency in Farads (F)
+
+=head2 C<$C = y_cap_pF($Y, $f_hz)> - Return a vector of capacitance it each frequency in picofarads (pF)
+
+=head2 C<$L = y_inductance($Y, $f_hz)> - Return a vector of inductance for each frequency in Henrys (H)
+
+=head2 C<$L = y_ind_nH($Y, $f_hz)> - Return a vector of inductance for each frequency in nanohenrys (nH)
+
+=head2 C<$Qc = y_qfactor_c($Y, $f_hz)> - Return the capacitive Q-factor vector for each frequency
+
+Note that all inductive values are zeroed.
+
+=head2 C<$Ql = y_qfactor_l($Y, $f_hz)> - Return the inductive Q-factor vector for each frequency
+
+Note that all capacitive values are zeroed.
+
+=head2 C<$X = y_reactance($Y, $f_hz)> - Return a vector of total reactance for each frequency
+
+This is the same as (Xl - Xc).
+
+=head2 C<$Xc = y_reactance_c($Y, $f_hz)> - Return a vector of capacitive reactance for each frequency
+
+=head2 C<$Xl = y_reactance_l($Y, $f_hz)> - Return a vector of inductive reactance for each frequency
+
+=head2 C<$R = y_resistance($Y)> - Return the equivalent series resistance (ESR) in Ohms
+
+=head2 C<$R = y_esr($Y, $f_hz)> - An alias for C<y_resistance>.
+
+=head2 C<$f_hz = y_srf($Y)> - Return the component's first self-resonant frequency
+
+This may not be accurate.  While the equation is a classic SRF calculation
+(1/(2*pi*sqrt(LC)), srf should scan the frequency lines as follows:
+"The SRF is determined to be the frequency at which the insertion (S21)
+phase changes from negative through zero to positive."
+[ https://www.coilcraft.com/getmedia/8ef1bd18-d092-40e8-a3c8-929bec6adfc9/doc363_measuringsrf.pdf ]
+
+=head1 Circuit Composition
+
+=head2 C<$Y_pp = y_parallel($Y1, $Y2, [...])> - Compose a parallel circuit
+
+For example, if C<$Y1> and C<$Y2> represent a 100pF capacitor, then C<$Y_pp> will
+represent a ~200pF capacitor. Parameters and return value must be
+Y matrices converted by a function like C<s_to_y>.
+
+=head2 C<$ABCD_ss = abcd_series($ABCD1, $ABCD2, [...])> - Compose a series circuit
+
+For example, if C<$ABCD1> and C<$ABCD2> represent a 100pF capacitor, then
+C<$ABCD_ss> will represent a ~50pF capacitor.  Parameters and return value must be
+ABCD matrices converted by a function like C<s_to_abcd>.
 
 =head1 Helper Functions
 
