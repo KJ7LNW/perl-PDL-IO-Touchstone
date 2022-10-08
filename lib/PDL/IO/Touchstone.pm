@@ -20,7 +20,7 @@
 #  respective owners and no grant or license is provided thereof.
 
 package PDL::IO::Touchstone;
-$VERSION = 1.005;
+$VERSION = 1.006;
 
 use 5.010;
 use strict;
