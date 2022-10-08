@@ -983,7 +983,7 @@ sub m_interpolate
 		my @cx_cols_new;
 		foreach my $cx (@cx_cols)
 		{
-			my ($cx_new, $err) = interpolate($f_new, $f, $cx);
+			my ($cx_new, $err) = _interpolate($f_new, $f, $cx);
 			if (!$args->{quiet} && any $err != 0)
 			{
 				carp "Frequency range for interpolation is below/beyond reference frequencies."
@@ -1150,6 +1150,21 @@ sub _to_diagonal
 	}
 
 	return $ret;
+}
+
+sub _interpolate
+{
+	my ($xi, $x, $y) = @_;
+
+	#return interpolate($xi, $x, $y);
+
+	my $y_re = $y->re;
+	my $y_im = $y->im;
+
+	my ($yi_re, $err1) = interpolate($xi, $x, $y_re);
+	my ($yi_im, $err2) = interpolate($xi, $x, $y_im);
+
+	return ($yi_re+$yi_im*i(), $err1+$err2);
 }
 
 1;
