@@ -67,6 +67,7 @@ BEGIN {
 		y_reactance_c
 		y_reactance
 		y_srf
+		y_srf_ideal
 		y_parallel
 		abcd_series
 		abcd_is_lossless
@@ -750,6 +751,36 @@ sub y_reactance
 	return y_reactance_l($Y, $f_hz) - y_reactance_c($Y, $f_hz);
 }
 
+# Return an array of PDLs, each representing a resonant frequency.
+sub y_srf
+{
+	my ($Y, $f_hz) = @_;
+
+	my $X = y_reactance($Y, $f_hz);
+
+	my ($counts, $vals) = ($X <=> 0)->rle;
+
+	my $f_idx = 0;
+	my @ret;
+	my $nelem = $X->nelem;
+
+	foreach my $c ($counts->dog)
+	{
+		$f_idx += $c;
+		push @ret, $f_hz->slice($f_idx-1) if $f_idx < $nelem;
+	}
+
+	if (wantarray)
+	{
+		return @ret;
+	}
+	else
+	{
+		return $ret[0];
+	}
+}
+
+
 # srf: Self-resonating frequency.
 #
 # This may not be accurate.  While the equation is a classic
@@ -760,7 +791,7 @@ sub y_reactance
 #
 # $Y - the Y parameter matrix (N,N,M)
 # $f_hz - a vector of frequencies (M)
-sub y_srf
+sub y_srf_ideal
 {
 	my ($Y, $f_hz) = @_;
 
@@ -1437,8 +1468,13 @@ Unless otherwise indicated:
 =item * C<$Y> is a set Y-parameter matrices (one for each frequency), either  loaded directly from
 a Y-formatted .s2p file or converted via C<s_to_y> or similar functions.
 
-=item * C<$f_hz> is a vector of frequencies in Hz (one for each Y-matrix in C<$Y>).
+=item * C<$f_hz> is a vector of frequencies in Hz (one for each Y-matrix in
+C<$Y>); C<$f_hz> is assumed to be sorted in ascending order and correspond to
+each Mth element in C<$Y> of dimension N,N,M where N is the number of ports and
+M is the number of sample frequencies.
 
+
+=back
 
 =head2 C<$C = y_capacitance($Y, $f_hz)> - Return a vector of capacitance for each frequency in Farads (F)
 
@@ -1468,12 +1504,30 @@ This is the same as (Xl - Xc).
 
 =head2 C<$R = y_esr($Y, $f_hz)> - An alias for C<y_resistance>.
 
-=head2 C<$f_hz = y_srf($Y)> - Return the component's first self-resonant frequency
+=head2 C<@srf_list_hz = y_srf($Y, $f_hz)> - Return the component's self-resonant frequencies (SRF)
 
-This may not be accurate.  While the equation is a classic SRF calculation
-(1/(2*pi*sqrt(LC)), srf should scan the frequency lines as follows:
-"The SRF is determined to be the frequency at which the insertion (S21)
-phase changes from negative through zero to positive."
+To calculate SRF, reactance is evaluated at each frequency.  If the next frequency being
+evaulated has an opposite sign (ie, going from capacitive to inductive reactance) then
+that previous frequency is selected as an SRF.
+
+Return value:
+
+=over 4
+
+=item * List context: Return the list of SRF's in ascending order, or an empty list if no SRF is found.
+
+=item * Scalar context: Return the lowest-frequency SRF, or undef if no SRF is found.
+
+=back
+
+=head2 C<$f_hz = y_srf_ideal($Y, $f_hz)> - Return the component's first self-resonant frequency
+
+Notice: In almost all cases you will want C<y_srf> instead of C<y_srf_ideal>.
+
+This is included for ideal Y-matrices only and may not be accurate.  While the
+equation is a classic SRF calculation (1/(2*pi*sqrt(LC)), srf should scan the
+frequency lines as follows: "The SRF is determined to be the frequency at which
+the insertion (S21) phase changes from negative through zero to positive."
 [ https://www.coilcraft.com/getmedia/8ef1bd18-d092-40e8-a3c8-929bec6adfc9/doc363_measuringsrf.pdf ]
 
 =head1 Circuit Composition

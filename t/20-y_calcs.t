@@ -18,11 +18,13 @@ use PDL::IO::Touchstone qw/rsnp
 	y_qfactor_l
 	y_qfactor_c
 	y_parallel
+	y_srf
+	y_srf_ideal
 	abcd_series
 	/;
 use File::Temp qw/tempfile/;
 
-use Test::More tests => 161;
+use Test::More tests => 263;
 
 my $tolerance = 1e-3;
 
@@ -34,31 +36,40 @@ my $datadir = 't/test-data/muRata';
 my %s2p_values = (
 	'cap-muRata-GRM1555CYA103GE01_10nF_35v.s2p' =>
 		{ cap => 9.86204915004454e-09, ind => -2.5684616424455e-06, esr => 0.00312989514151146,
-			Qc => 5156.12195656487, Ql => 0, Xc => 16.138121060893, Xl => -16.1381204538679 },
+			Qc => 5156.12195656487, Ql => 0, Xc => 16.138121060893, Xl => -16.1381204538679,
+			srf_last => 84500083.4204751 },
 	'cap-muRata-GRM155R61C105KA12_1uF_16v.s2p' =>
 		{ cap => 5.27691542731619e-07, ind => -4.78624758379708, esr => 162.419882220304,
-			Qc => 18.5695255028615, Ql => 0, Xc => 3016.06014506169, Xl => -3007.28804950376 },
+			Qc => 18.5695255028615, Ql => 0, Xc => 3016.06014506169, Xl => -3007.28804950376,
+			srf_last => 11891693.0572848 },
 	'ferrite-muRata-BLM15BD182SN1_0402_1800Z_100MHz.s2p' =>
 		{ cap => -1.412701071101e-08, ind => 1.7773393864684e-06, esr => 1.04960036949916,
-			Qc => 0, Ql => 10.6396234637937, Xc => -11.2660028613029, Xl => 11.1673527189298 },
+			Qc => 0, Ql => 10.6396234637937, Xc => -11.2660028613029, Xl => 11.1673527189298,
+			srf_last => 129524272.673402  },
 	'ferrite-muRata-NFZ32BW881HN10_1210_880Z_1MHz.s2p' =>
 		{ cap => -1.88228254545831e-10, ind => 0.000134510356259619, esr => 18.1263321333963,
-			Qc => 0, Ql => 46.6257314438592, Xc => -845.54225653271, Xl => 845.153494113932 },
+			Qc => 0, Ql => 46.6257314438592, Xc => -845.54225653271, Xl => 845.153494113932,
+			srf_last => 11267541.843421 },
 	'ind-choke-muRata-LQW15CA22NJ00.s2p' =>
 		{ cap => -1.12737540087989e-08, ind => 2.23030799220735e-08, esr => 0.120641109671948,
-			Qc => 0, Ql => 11.6158069543859, Xc => -1.41172978377636, Xl => 1.40134384071225 },
+			Qc => 0, Ql => 11.6158069543859, Xc => -1.41172978377636, Xl => 1.40134384071225,
+			srf_last => undef },
 	'ind-choke-muRata-LQW15CA2R0K00.s2p' =>
 		{ cap => -1.17609717726732e-10, ind => 2.1405746899325e-06, esr => 10.5552789050037,
-			Qc => 0, Ql => 12.7420862695809, Xc => -135.324653581513, Xl => 134.496274407044 },
+			Qc => 0, Ql => 12.7420862695809, Xc => -135.324653581513, Xl => 134.496274407044,
+			srf_last => 154301731.110681 },
 	'ind-choke-muRata-LQW15DN150M00.s2p' =>
 		{ cap => 2.27795350681818e-13, ind => -3.54463946754354e-05, esr => 5621.38551154572,
-			Qc => 2.4857754896787, Ql => 0, Xc => 13973.5023226353, Xl => -11135.8133108592 },
+			Qc => 2.4857754896787, Ql => 0, Xc => 13973.5023226353, Xl => -11135.8133108592,
+			srf_last => 14602319483.5286 },
 	'ind-muRata-LQW15AN3N8C10.s2p' =>
 		{ cap => -2.83659488151797e-09, ind => 3.56543038788561e-09, esr => 0.047824416542393,
-			Qc => 0, Ql => 23.42136239872, Xc => -1.1221549057208, Xl => 1.12011299134672 },
+			Qc => 0, Ql => 23.42136239872, Xc => -1.1221549057208, Xl => 1.12011299134672,
+			srf_last => 14385226226.8994 },
 	'ind-muRata-LQW15AN9N9G00.s2p' =>
 		{ cap => -1.03637818004319e-09, ind => 9.73643877575246e-09, esr => 0.196128109773235,
-			Qc => 0, Ql => 15.5958901380311, Xc => -3.07136808081511, Xl => 3.05879245300307 },
+			Qc => 0, Ql => 15.5958901380311, Xc => -3.07136808081511, Xl => 3.05879245300307,
+			srf_last => 7554317730.63135 },
 
 );
 
@@ -92,9 +103,8 @@ foreach my $fn (@files, @ARGV)
 
 	foreach my $v (sort keys %$ref_vals)
 	{
-		my $e = abs($ref_vals->{$v} - $vals{$v});
-
-		verify_one($ref_vals->{$v}, $vals{$v}, "$fn: $v");
+		my $value = $vals{$v} // '(undef)';
+		verify_one($ref_vals->{$v}, $vals{$v}, "$fn: $v=$value");
 	}
 
 	# Parallel and series calculations on ferrite beads don't always behave
@@ -154,6 +164,12 @@ sub verify_one
 {
 	my ($m, $inverse, $msg) = @_;
 
+
+	ok((defined($m) && defined($inverse)) || (!defined($m) && !defined($inverse)),
+		"$msg: " . (defined($m) ? 'defined' : 'undef'));
+
+	return if (!defined($m) || !defined($inverse));
+
 	my $re_err = sum(($m-$inverse)->re->abs);
 	my $im_err = sum(($m-$inverse)->im->abs);
 
@@ -165,6 +181,7 @@ sub build_vals
 {
 	my ($Y, $f) = @_;
 
+	my @srf = y_srf($Y, $f);
 	return (
 		cap => (y_capacitance($Y, $f)->slice(0)),
 		ind => (y_inductance($Y, $f)->slice(0)),
@@ -172,6 +189,7 @@ sub build_vals
 		Qc => (y_qfactor_c($Y, $f)->slice(0)),
 		Ql => (y_qfactor_l($Y, $f)->slice(0)),
 		Xc => (y_reactance_c($Y, $f)->slice(0)),
-		Xl => (y_reactance_l($Y, $f)->slice(0))
+		Xl => (y_reactance_l($Y, $f)->slice(0)),
+		srf_last => $srf[$#srf]
 	);
 }
