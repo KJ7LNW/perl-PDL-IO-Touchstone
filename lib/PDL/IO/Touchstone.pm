@@ -1565,7 +1565,7 @@ ABCD matrices converted by a function like C<s_to_abcd>.
 
 Given any matrix (N,N,M) formatted matrix, this function will return N.
 
-=head2 C<($f_new, $m_new) = m_interpolate($f, $m, $args)> - return the number of ports represented by the matrix.
+=head2 C<($f_new, $m_new) = m_interpolate($f, $m, $args)> - Interpolate C<$m> to a different frequency set
 
 This function rescales the X-parameter matrix (C<$m>) and frequency set (C<$f>)
 to fit the requested frequency bounds.  This example will return the
