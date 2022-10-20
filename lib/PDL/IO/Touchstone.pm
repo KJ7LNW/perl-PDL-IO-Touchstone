@@ -251,6 +251,28 @@ sub wsnp_fh
 	my $n_ports = n_ports($m);
 	my $n_freqs = $f->nelem;
 
+	if (ref($z0) eq 'PDL')
+	{
+		my $numz = $z0->nelem;
+
+		if ($numz > 1 && $numz != $n_ports)
+		{
+			croak("\$z0: must be single valued, or a vector of one z0 value per port: n_ports=$n_ports, z0=$z0");
+		}
+		elsif ($numz == $n_ports)
+		{
+			my $z01 = $z0->slice(0)->sclr;
+
+			my $zx = zeroes($numz)+$z01;
+			if (any $zx != $z0)
+			{
+				croak("All port impedances must be identical when writing Touchstone files: z0=$z0");
+			}
+		}
+
+		$z0 = $z0->slice(0)->sclr;
+	}
+
 	# Assume $f frequencies are in Hz if from_hz is not defined
 	# and always default writing in MHz if the user does not specify.
 	# This is consistent with rsnp() and common industry practice:
