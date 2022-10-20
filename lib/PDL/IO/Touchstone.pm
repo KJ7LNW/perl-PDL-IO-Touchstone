@@ -1219,6 +1219,11 @@ engineers can estimate signal behavior at various frequencies in their circuit
 designs.  Examples of RF components include capacitors, inductors, resistors,
 filters, power splitters, etc.
 
+This C<PDL::IO::Touchstone> module is very low-level and returns lots of
+variables to keep track of.  Instead, I recommend that you use L<RF::Component>
+module for an object-oriented approach which encapsulates the data returned by
+C<rsnp()> and will, most likely, simplify your RF component implementation.
+
 =head1 SYNOPSIS
 
 	use PDL::IO::Touchstone;
@@ -1675,6 +1680,8 @@ For example, re-compose $T from the C<m_to_pos_vecs> example.
 =head1 SEE ALSO
 
 =over 4
+
+=item L<RF::Component> - An object-oriented encapsulation of C<PDL::IO::Touchstone>.
 
 =item Touchstone specification: L<https://ibis.org/connector/touchstone_spec11.pdf>
 
