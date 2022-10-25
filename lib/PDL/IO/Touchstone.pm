@@ -89,15 +89,30 @@ sub rsnp
 {
 	my ($fn, $args) = @_;
 
+	$args = { ($args ? %$args : () ), filename => $fn };
+
+	open(my $in, $fn) or croak "$fn: $!";
+
+	my @ret = rsnp_fh($in, $args);
+
+	close($in) or carp "$fn: $!";
+
+	return @ret;
+}
+
+sub rsnp_fh
+{
+	my ($in, $args) = @_;
+
 	my $class;
 	my $comments = '';
 	my ($orig_funit, $param_type, $fmt, $R, $z0);
 	my $n_ports;
 
+	my $fn = $args->{filename} // '(unknown file)';
+
 	# Try to enforce the number of ports based on the filename extension.
 	$n_ports = $1 if ($fn =~ /s(\d+)p/i);
-
-	open(my $in, $fn) or croak "$fn: $!";
 
 	my $n = 0;
 	my $line;
@@ -1342,6 +1357,12 @@ re-create the original touchstone file.
 
 =back
 
+=head2 C<rsnp_fh($fh, $options)> - Read touchstone file
+
+This is the same as C<rsnp> except that it takes a file handle instead of a
+filename.  Additionally, a C<filename> option can be passed to C<$options> to
+facilitate more verbose error output.
+
 =head2 C<wsnp($filename, $f, $m, $param_type, $z0, $comments, $fmt, $from_hz, $to_hz)>
 
 =head3 Arguments
@@ -1681,17 +1702,19 @@ For example, re-compose $T from the C<m_to_pos_vecs> example.
 
 =over 4
 
+=item L<PDL::IO::MDIF> - A L<PDL> IO module to load Measurement Data Interchange Format (*.mdf) files.
+
 =item L<RF::Component> - An object-oriented encapsulation of C<PDL::IO::Touchstone>.
 
 =item Touchstone specification: L<https://ibis.org/connector/touchstone_spec11.pdf>
 
 =item S-parameter matrix transform equations: L<http://qucs.sourceforge.net/tech/node98.html>
 
-=item Building MDF files from multiple S2P files: L<https://youtu.be/q1ixcb_mgeM>, L<https://github.com/KJ7NLL/mdf/>
+=item Building MDIF/MDF files from multiple S2P files: L<https://youtu.be/q1ixcb_mgeM>, L<https://github.com/KJ7NLL/mdf/>
 
 =item Optimizing amplifer impedance match circuits with MDF files: L<https://youtu.be/nx2jy7EHzxw>
 
-=item MDF file format: L<https://awrcorp.com/download/faq/english/docs/users_guide/data_file_formats.html#i489154>
+=item MDIF file format: L<https://awrcorp.com/download/faq/english/docs/users_guide/data_file_formats.html#i489154>
 
 =item "Conversions Between S, Z, Y, h, ABCD, and T Parameters which are Valid
 for Complex Source and Load Impedances" March 1994 IEEE Transactions on
