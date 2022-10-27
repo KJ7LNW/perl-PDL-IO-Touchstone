@@ -19,3 +19,5 @@ PDL-IO-Touchstone-*
 PDL-IO-Touchstone-*.tar.gz
 /local-test-data/
 TODO
+touchstone
+nytprof
