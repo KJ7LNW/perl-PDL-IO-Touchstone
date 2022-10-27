@@ -203,7 +203,8 @@ It returns the an arrayref of hashrefs, as follows:
 			var1 => "val1",
 			var2 => -123, 
 			...
-			_data => [ @rsnp_data ]
+			_data => [ @rsnp_data ],
+			_comments => [ 'comment line 1', 'comment line 2', ... ]
 		},
 
 		# Component 2:
@@ -241,20 +242,50 @@ Interpolation using things like L<PDL::IO::Touchstone>'s  C<m_interpolate>
 function is possible if the frequencies differ, but we don't want to modify the
 source data, and that wouldn't address the RF port count issue.
 
+=item * C<_comments> Structure
+
+Comments are simply an arrayref of strings, one for each comment line.  When
+written by C<wsnp>, each comment will be written before that component's
+section on the resulting .mdf text file.
+
 =back
 
 =head2 C<wmdif($filename, $mdif_data)> - Write MDIF file
 
-The C<wmdif> function writes the MDIF data in C<$mdif_data> to C<$filename> 
-
+The C<wmdif> function writes the MDIF data in C<$mdif_data> to C<$filename>.
 The function C<wmdf> is an alias for C<wmdif>.
 
+Internally wmdif uses L<PDL::IO::Touchstone>'s  C<wsnp_fh> function to write
+Touchstone data for each component into the MDIF file.  To generate an MDIF
+file from multiple Touchstone files you can read each Touchstone file and merge
+them as follows:
+
+	my @cap_100pF = rsnp('100pF.s2p');
+	my @cap_200pF = rsnp('200pF.s2p');
+	my @cap_300pF = rsnp('300pF.s2p');
+
+	wmdif("my_caps.mdf", [
+			{ pF => 100, _data => \@cap_100pF },
+			{ pF => 200, _data => \@cap_200pF },
+			{ pF => 300, _data => \@cap_300pF },
+		]);
+
+Note that C<pF> is just an arbitrary variable that will be stored in the MDIF file
+for reference when you load it in your EDA software.
+
+You may transform the content of C<$mdif_data> in any way that is suitable to
+your application before writing the file provided the resulting data is valid.
+For example, if you convert S paramters to Z parameters using C<s_to_z> then be
+sure to set C<$param_type> to C<Y> before writing the MDIF output. See
+L<PDL::IO::Touchstone> for details.
 
 =head1 SEE ALSO
 
 =over 4
 
-=item MDIF file format: L<https://awrcorp.com/download/faq/english/docs/users_guide/data_file_formats.html#i489154>
+=item MDIF file format from AWR: L<https://awrcorp.com/download/faq/english/docs/users_guide/data_file_formats.html#i489154>
+
+=item MDIF file format from Keysight L<https://edadocs.software.keysight.com/display/ads2009/Working+with+Data+Files#WorkingwithDataFiles-1135104>
 
 =item L<RF::Component> - An object-oriented encapsulation of C<PDL::IO::Touchstone>.
 
