@@ -28,6 +28,8 @@ use warnings;
 
 use Carp;
 
+use IO::Handle;
+
 use PDL;
 use PDL::LinearAlgebra;
 use PDL::Constants qw(PI);
@@ -40,6 +42,9 @@ BEGIN {
 	our @ISA = ( @ISA, qw(Exporter) );
 	our @EXPORT = qw/rsnp wsnp/;
 	our @EXPORT_OK = qw/
+		rsnp_fh
+		wsnp_fh
+
 		n_ports
 		m_interpolate
 		f_uniformity
@@ -111,6 +116,8 @@ sub rsnp_fh
 
 	my $fn = $args->{filename} // '(unknown file)';
 
+	my $EOF_REGEX = $args->{EOF_REGEX};
+
 	# Try to enforce the number of ports based on the filename extension.
 	$n_ports = $1 if ($fn =~ /s(\d+)p/i);
 
@@ -123,14 +130,24 @@ sub rsnp_fh
 	my @comments;
 	my @cols;
 	my @f;
+
+	# input_line_number is a surprisingly slow call, so get it out of the loop:
+	$n = $in->input_line_number - 1;
+
 	while (defined($line = <$in>))
 	{
-		chomp($line);
 		$n++;
+
+		last if (defined($EOF_REGEX) && $line =~ /$EOF_REGEX/);
+
+		chomp($line);
 
 		$line =~ s/^\s+|\s+$//g;
 
 		next if !length($line);
+
+		# Skip % lines as found in MDIF files:
+		next if $line =~ /^\s*%/;
 
 		# Strip leading space so split() will work properly.
 		$line =~ s/^\s+//;
@@ -344,11 +361,14 @@ sub wsnp_fh
 	# $out is in touchstone-formated order for each frequency with frequency as the first element:
 	# ie: [freq s11 21 s12 s11] < transposed for only for 2-port models.
 	
+	$f = $f->reshape($n_freqs);
+	my @freqs = $f->dog;
+
 	for (my $i = 0; $i < $n_freqs; $i++)
 	{
 		# matrix at frequency $i:
 		my $fm = $out->slice(":,$i");
-		my $freq = $f->slice("$i")->sclr;
+		my $freq = $freqs[$i];
 
 		# More than 2 ports are printed on multiple lines,
 		# at least one line for each port.
@@ -357,9 +377,14 @@ sub wsnp_fh
 			$fm = $fm->reshape($n_ports*2,$n_ports);
 		}
 
+		# First, print the frequency:
 		print $fd $freq;
 
 		# foreach matrix row:
+		# TODO: This loop is a hotspot, maybe someone can optimize it!
+		#       Using PDL::IO::Misc's `wcols` is probably a good idea
+		#       but formating it for Touchstone's weird column format
+		#       for n_ports >2 could be challenging.
 		foreach my $row ($fm->dog)
 		{
 			# No more than four data samples are allowed per line,
@@ -1360,8 +1385,17 @@ re-create the original touchstone file.
 =head2 C<rsnp_fh($fh, $options)> - Read touchstone file
 
 This is the same as C<rsnp> except that it takes a file handle instead of a
-filename.  Additionally, a C<filename> option can be passed to C<$options> to
-facilitate more verbose error output.
+filename.  Additionally, C<$options> accepts the following additional values:
+
+=over 4
+
+=item C<filename> - the original filename to facilitate more verbose error output.
+
+=item C<EOF_REGEX> - a regular expression that, when matched, will cause C<rsnp_fh> to stop reading data.
+
+This is used by L<PDL::IO::MDIF> when loading multiple touchstone files from a single MDIF file.
+
+=back
 
 =head2 C<wsnp($filename, $f, $m, $param_type, $z0, $comments, $fmt, $from_hz, $to_hz)>
 
