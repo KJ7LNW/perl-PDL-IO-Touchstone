@@ -140,6 +140,8 @@ sub rsnp_fh
 
 		last if (defined($EOF_REGEX) && $line =~ /$EOF_REGEX/);
 
+		last if $line =~ /^\s*!\s*Noise Parameters/i;
+
 		chomp($line);
 
 		$line =~ s/^\s+|\s+$//g;
