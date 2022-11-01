@@ -318,11 +318,14 @@ MHz (inclusive):
           quiet => 1 # optional
         } )
 
-This function returns `$f` and `$m` verbatim if no `$args` are passed.
+This function returns `$f` and `$m` without interpolation if no `$args` are passed.
 
 - freq\_min\_hz: the minimum frequency at which to interpolate
 - freq\_max\_hz: the maximum frequency at which to interpolate
-- freq\_count: the total number of frequencies sampled
+- freq\_count: the total number of frequencies sampled.
+
+    If `freq_count` is `1` then only `freq_min_hz` is returned.
+
 - quiet: suppress warnings when interpolating beyond the available frequency range
 
 ## `$max_diff = f_uniformity($f)` - Return maximum frequency deviation.
@@ -370,6 +373,26 @@ This is the inverse of `m_to_pos_vecs`, here is the identity transform:
 For example, re-compose $T from the `m_to_pos_vecs` example.
 
         $T = pos_vecs_to_m($T11, $T12, $T21, $T22)
+
+## `%h = rsnp_hash(rsnp(...))` - Create a named hash from the return values of rsnp
+
+It is sometimes more familiar and readable to work with a hash of names instead
+of an index of arrays.  This function converts the return value of `rsnp` into
+a hash with the following fields.  The `[n]` values are the array index order
+into the list that `rsnp` returns.
+
+    %h = rsnp_hash(rsnp($filename, ...));
+
+    %h = rsnp_hash(rsnp_fh($filehandle, ...));
+
+- \[0\] freqs
+- \[1\] m
+- \[2\] param\_type
+- \[3\] z0\_ref
+- \[4\] comments
+- \[5\] output\_fmt
+- \[6\] funit
+- \[7\] orig\_f\_unit
 
 # SEE ALSO
 
