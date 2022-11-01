@@ -45,6 +45,8 @@ BEGIN {
 		rsnp_fh
 		wsnp_fh
 
+		rsnp_hash
+
 		n_ports
 		m_interpolate
 		f_uniformity
@@ -103,6 +105,15 @@ sub rsnp
 	close($in) or carp "$fn: $!";
 
 	return @ret;
+}
+
+sub rsnp_hash
+{
+	my @data = @_;
+	my %data;
+	@data{qw/freqs m param_type z0_ref comments output_fmt funit orig_f_unit/} = @data;
+
+	return %data;
 }
 
 sub rsnp_fh
@@ -1038,14 +1049,27 @@ sub m_interpolate
 	croak "caller must expect an array!" if !wantarray;
 
 	# Interpolate frequency range and input data:
-	if (defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count})
+	if ((defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count}) ||
+		defined $args->{freq_min_hz} && defined $args->{freq_count} && $args->{freq_count} == 1)
 	{
-		if ($args->{freq_min_hz} >= $args->{freq_max_hz})
+		my $freq_step;
+
+		if ($args->{freq_count} == 1)
+		{
+			$freq_step = 0;
+			$args->{freq_max_hz} = $args->{freq_min_hz};
+		}
+		else
+		{
+			$freq_step = ($args->{freq_max_hz} - $args->{freq_min_hz}) / ($args->{freq_count} - 1);
+		}
+
+		if ($freq_step && $args->{freq_min_hz} >= $args->{freq_max_hz})
 		{
 			croak "freq_min_hz=$args->{freq_min_hz} !< freq_max_hz=$args->{freq_max_hz}"
 		}
 
-		my $freq_step = ($args->{freq_max_hz} - $args->{freq_min_hz}) / ($args->{freq_count} - 1);
+
 		my $f_new = sequence($args->{freq_count}) * $freq_step + $args->{freq_min_hz};
 
 		# Scale the frequency unit to those requested by the caller:
@@ -1671,7 +1695,7 @@ MHz (inclusive):
 	  quiet => 1 # optional
 	} )
 
-This function returns C<$f> and C<$m> verbatim if no C<$args> are passed.
+This function returns C<$f> and C<$m> without interpolation if no C<$args> are passed.
 
 =over 4
 
@@ -1679,7 +1703,9 @@ This function returns C<$f> and C<$m> verbatim if no C<$args> are passed.
 
 =item * freq_max_hz: the maximum frequency at which to interpolate
 
-=item * freq_count: the total number of frequencies sampled
+=item * freq_count: the total number of frequencies sampled.
+
+If C<freq_count> is C<1> then only C<freq_min_hz> is returned.
 
 =item * quiet: suppress warnings when interpolating beyond the available frequency range
 
@@ -1733,6 +1759,36 @@ For example, re-compose $T from the C<m_to_pos_vecs> example.
 	$T = pos_vecs_to_m($T11, $T12, $T21, $T22)
 
 
+=head2 C<%h = rsnp_hash(rsnp(...))> - Create a named hash from the return values of rsnp
+
+It is sometimes more familiar and readable to work with a hash of names instead
+of an index of arrays.  This function converts the return value of C<rsnp> into
+a hash with the following fields.  The C<[n]> values are the array index order
+into the list that C<rsnp> returns.
+
+    %h = rsnp_hash(rsnp($filename, ...));
+
+    %h = rsnp_hash(rsnp_fh($filehandle, ...));
+
+=over 4
+
+=item * [0] freqs
+
+=item * [1] m
+
+=item * [2] param_type
+
+=item * [3] z0_ref
+
+=item * [4] comments
+
+=item * [5] output_fmt
+
+=item * [6] funit
+
+=item * [7] orig_f_unit
+
+=back
 
 =head1 SEE ALSO
 
