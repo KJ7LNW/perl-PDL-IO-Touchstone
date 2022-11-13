@@ -46,8 +46,13 @@ BEGIN {
 		wsnp_fh
 
 		rsnp_list_to_hash
+		rsnp_hash_to_list
+
 		rsnp_hash
 		rsnp_fh_hash
+
+		wsnp_hash
+		wsnp_fh_hash
 
 		n_ports
 		m_interpolate
@@ -116,6 +121,15 @@ sub rsnp_list_to_hash
 	@data{qw/freqs m param_type z0_ref comments output_fmt funit orig_f_unit/} = @data;
 
 	return %data;
+}
+
+sub rsnp_hash_to_list
+{
+	my %data = @_;
+
+	my @data = @data{qw/freqs m param_type z0_ref comments output_fmt funit orig_f_unit/};
+
+	return @data;
 }
 
 sub rsnp_fh
@@ -428,6 +442,9 @@ sub wsnp_fh
 
 	# we don't close the file descriptor here, the caller (or `wsnp`) will.
 }
+
+sub wsnp_hash     {  return  wsnp(rsnp_hash_to_list(@_));     }
+sub wsnp_fh_hash  {  return  wsnp_fh(rsnp_hash_to_list(@_));  }
 
 # https://physics.stackexchange.com/questions/398988/converting-magnitude-ratio-to-complex-form
 sub _cols_to_complex_cols
@@ -1797,6 +1814,10 @@ into the list that C<rsnp> returns.
 
 =back
 
+=head2 C<%h = rsnp_hash_to_list(rsnp_hash(...))> - Create a list from rsnp_hash
+
+This is the inverse of C<rsnp_list_to_hash>.
+
 =head2 C<%h = rsnp_hash(...)> - Same as C<rsnp> but returns a hash.
 
 See hash elements in C<rsnp_list_to_hash>
@@ -1804,6 +1825,14 @@ See hash elements in C<rsnp_list_to_hash>
 =head2 C<%h = rsnp_fh_hash(...)> - Same as C<rsnp_fh> but returns a hash.
 
 See hash elements in C<rsnp_list_to_hash>
+
+=head2 C<wsnp_hash(%h)> - Same as C<wsnp> but takes a hash.
+
+See hash elements in C<rsnp_hash_to_list>
+
+=head2 C<wsnp_fh_hash(%h)> - Same as C<wsnp_fh> but takes a hash.
+
+See hash elements in C<rsnp_hash_to_list>
 
 =head1 SEE ALSO
 
