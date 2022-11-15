@@ -350,17 +350,15 @@ Values for `N` and `S` may be floating-point valued, but `C` must be an integer.
 This example will return the interpolated `$S_new` and `$f_new` with 10
 frequency samples from 100 to 1000 MHz (inclusive):
 
+    # or using Scalar Frequency-Range Specification as part of the hash:
     ($f_new, $S_new) = m_interpolate($f, $S,
-        { freq_min_hz => 100e6, freq_max_hz => 1000e6, freq_count => 10,
+        { freq_range => '100e6 - 1000e6 x10',
           quiet => 1 # optional
         } )
 
-- freq\_min\_hz: the minimum frequency at which to interpolate
-- freq\_max\_hz: the maximum frequency at which to interpolate
-- freq\_count: the total number of frequencies sampled.
-
-    If `freq_count` is `1` then only `freq_min_hz` is returned.
-
+- freq\_range: This specifies a scalar or ARRAY or [PDL](https://metacpan.org/pod/PDL) reference as
+defined in "Scalar Frequency-Range Specification".  A hash format is useful for
+additional options such as `quiet` and may be extended further in the future. 
 - quiet: suppress warnings when interpolating beyond the available frequency range
 
 ## `$max_diff = f_uniformity($f)` - Return maximum frequency deviation.
