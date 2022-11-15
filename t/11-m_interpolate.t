@@ -37,8 +37,7 @@ foreach my $fn (@files, @ARGV)
 	my $f_new_max = $f_max-1000;
 	my $f_new_count = $f->nelem;
 
-	my ($f_new, $m_new) =  m_interpolate($f, $m,
-		{ freq_min_hz => $f_new_min, freq_max_hz => $f_new_max, freq_count => $f_new_count });
+	my ($f_new, $m_new) =  m_interpolate($f, $m, "$f_new_min - $f_new_max x $f_new_count");
 
 	# Quiet: don't warn, we know we are extrapolating back out beyond fmin/fmax:
 	my ($f2, $m2) = m_interpolate($f_new, $m_new,
