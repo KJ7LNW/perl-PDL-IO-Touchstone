@@ -41,8 +41,7 @@ foreach my $fn (@files, @ARGV)
 
 	# Quiet: don't warn, we know we are extrapolating back out beyond fmin/fmax:
 	my ($f2, $m2) = m_interpolate($f_new, $m_new,
-		{ freq_min_hz => $f_min, freq_max_hz => $f_max, freq_count => $f_count, 
-	          quiet => 1	});
+		{ freq_range => "$f_min - $f_max x$f_count", quiet => 1 });
 
 	verify_one($f, $f2, "$fn: f");
 	verify_one($m, $m2, "$fn: m");

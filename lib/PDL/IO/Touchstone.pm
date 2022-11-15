@@ -1075,20 +1075,11 @@ sub m_interpolate
 
 	if (ref($args) eq 'HASH')
 	{
-		$args->{freq_max_hz} //= $args->{freq_min_hz} if exists($args->{freq_min_hz});
 		$quiet = $args->{quiet};
 
-		if (defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count})
+		if (defined $args->{freq_range})
 		{
-			$args = "$args->{freq_min_hz} - $args->{freq_max_hz} x$args->{freq_count}";
-		}
-		elsif (defined $args->{freq_min_hz} || defined $args->{freq_max_hz} || defined $args->{freq_count})
-		{
-			croak("If any of freq_min_hz, freq_max_hz, or freq_count are defined then all must be defined.");
-		}
-		elsif (defined $args->{range})
-		{
-			$args = $args->{range};
+			$args = $args->{freq_range};
 		}
 		else
 		{
@@ -1122,9 +1113,25 @@ sub m_interpolate
 			{
 				my ($start, $end, $count) = ($1, $2, $3);
 				my $range = $end - $start;
-				my $step = $range/($count-1);
 
-				push @$f_new, map { $start + $step*$_ } (0 .. $count-1);
+				if ($count <= 1)
+				{
+					if (abs($end - $start) < 1e-6)
+					{
+						push @$f_new, $start;
+					}
+					else
+					{
+						croak "Invalid element: $start-$end x$count";
+					}
+				}
+				else
+				{
+					# Count is known to be > 1, so no div-by-zero:
+					my $step = $range/($count-1);
+
+					push @$f_new, map { $start + $step*$_ } (0 .. $count-1);
+				}
 			}
 			elsif ($set =~ /^([^+]+)\+=([^x]+)x(\d+)$/)
 			{
@@ -1804,20 +1811,18 @@ Values for C<N> and C<S> may be floating-point valued, but C<C> must be an integ
 This example will return the interpolated C<$S_new> and C<$f_new> with 10
 frequency samples from 100 to 1000 MHz (inclusive):
 
+    # or using Scalar Frequency-Range Specification as part of the hash:
     ($f_new, $S_new) = m_interpolate($f, $S,
-	{ freq_min_hz => 100e6, freq_max_hz => 1000e6, freq_count => 10,
+	{ freq_range => '100e6 - 1000e6 x10',
 	  quiet => 1 # optional
 	} )
 
+
 =over 4
 
-=item * freq_min_hz: the minimum frequency at which to interpolate
-
-=item * freq_max_hz: the maximum frequency at which to interpolate
-
-=item * freq_count: the total number of frequencies sampled.
-
-If C<freq_count> is C<1> then only C<freq_min_hz> is returned.
+=item * freq_range: This specifies a scalar or ARRAY or L<PDL> reference as
+defined in "Scalar Frequency-Range Specification".  A hash format is useful for
+additional options such as C<quiet> and may be extended further in the future. 
 
 =item * quiet: suppress warnings when interpolating beyond the available frequency range
 
