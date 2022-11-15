@@ -1070,57 +1070,95 @@ sub m_interpolate
 
 	croak "caller must expect an array!" if !wantarray;
 
+	my $f_new = $f;
+	my $quiet;
+
 	# Interpolate frequency range and input data:
-	if ((defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count}) ||
-		defined $args->{freq_min_hz} && defined $args->{freq_count} && $args->{freq_count} == 1)
+	if (!ref($args) && length($args))
 	{
-		my $freq_step;
+		$f_new = [];
 
-		if ($args->{freq_count} == 1)
+		$args =~ s/\s+//g;
+		foreach my $set (split /,/, $args)
 		{
-			$freq_step = 0;
-			$args->{freq_max_hz} = $args->{freq_min_hz};
-		}
-		else
-		{
-			$freq_step = ($args->{freq_max_hz} - $args->{freq_min_hz}) / ($args->{freq_count} - 1);
-		}
-
-		if ($freq_step && $args->{freq_min_hz} >= $args->{freq_max_hz})
-		{
-			croak "freq_min_hz=$args->{freq_min_hz} !< freq_max_hz=$args->{freq_max_hz}"
-		}
-
-
-		my $f_new = sequence($args->{freq_count}) * $freq_step + $args->{freq_min_hz};
-
-		# Scale the frequency unit to those requested by the caller:
-		my $funit = $args->{units} || 'Hz';
-		$f_new = _si_scale_hz('Hz', $funit, $f_new);
-
-		my @cx_cols = m_to_pos_vecs($m);
-		my @cx_cols_new;
-		foreach my $cx (@cx_cols)
-		{
-			my ($cx_new, $err) = _interpolate($f_new, $f, $cx);
-			if (!$args->{quiet} && any $err != 0)
+			if ($set =~ /^[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?$/)
 			{
-				carp "Frequency range for interpolation is below/beyond reference frequencies."
+				push @$f_new, $set;
 			}
-			push @cx_cols_new, $cx_new;
+			elsif ($set =~ /^([^-]+)-([^x]+)x(\d+)$/)
+			{
+				my ($start, $end, $count) = ($1, $2, $3);
+				my $range = $end - $start;
+				my $step = $range/($count-1);
+
+				push @$f_new, map { $start + $step*$_ } (0 .. $count-1);
+			}
+			elsif ($set =~ /^([^+]+)\+=([^x]+)x(\d+)$/)
+			{
+				my ($start, $step, $count) = ($1, $2, $3);
+				push @$f_new, map { $start + $step*$_ } (0 .. $count-1);
+			}
+			else
+			{
+				croak "Invalid range specification ($args) at '$set'";
+			}
+
 		}
 
-		return ($f_new, pos_vecs_to_m(@cx_cols_new));
+		# Sort in ascending order, just in case:
+		$f_new = pdl(sort { $a <=> $b } @$f_new);
 	}
-	elsif (defined $args->{freq_min_hz} || defined $args->{freq_max_hz} || defined $args->{freq_count})
+	elsif (ref($args) eq 'HASH')
 	{
-		croak("If any of freq_min_hz, freq_max_hz, or freq_count are defined then all must be defined.");
+		$quiet = $args->{quiet};
+
+		if ((defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count}) ||
+			defined $args->{freq_min_hz} && defined $args->{freq_count} && $args->{freq_count} == 1)
+		{
+			my $freq_step;
+
+			if ($args->{freq_count} == 1)
+			{
+				$freq_step = 0;
+				$args->{freq_max_hz} = $args->{freq_min_hz};
+			}
+			else
+			{
+				$freq_step = ($args->{freq_max_hz} - $args->{freq_min_hz}) / ($args->{freq_count} - 1);
+			}
+
+			if ($freq_step && $args->{freq_min_hz} >= $args->{freq_max_hz})
+			{
+				croak "freq_min_hz=$args->{freq_min_hz} !< freq_max_hz=$args->{freq_max_hz}"
+			}
+
+
+			$f_new = sequence($args->{freq_count}) * $freq_step + $args->{freq_min_hz};
+		}
+		elsif (defined $args->{freq_min_hz} || defined $args->{freq_max_hz} || defined $args->{freq_count})
+		{
+			croak("If any of freq_min_hz, freq_max_hz, or freq_count are defined then all must be defined.");
+		}
 	}
 	else
 	{
 		# Do nothing, just return the original values.
 		return ($f, $m);
 	}
+
+	my @cx_cols = m_to_pos_vecs($m);
+	my @cx_cols_new;
+	foreach my $cx (@cx_cols)
+	{
+		my ($cx_new, $err) = _interpolate($f_new, $f, $cx);
+		if (!$quiet && any $err != 0)
+		{
+			carp "Frequency range for interpolation is below/beyond reference frequencies."
+		}
+		push @cx_cols_new, $cx_new;
+	}
+
+	return ($f_new, pos_vecs_to_m(@cx_cols_new));
 }
 
 # Return the maximum difference between an ideal uniformally-spaced frequency set
@@ -1708,16 +1746,18 @@ Given any matrix (N,N,M) formatted matrix, this function will return N.
 =head2 C<($f_new, $m_new) = m_interpolate($f, $m, $args)> - Interpolate C<$m> to a different frequency set
 
 This function rescales the X-parameter matrix (C<$m>) and frequency set (C<$f>)
-to fit the requested frequency bounds.  This example will return the
-interpolated C<$S_new> and C<$f_new> with 10 frequency samples from 100 to 1000
-MHz (inclusive):
+to fit the requested frequency bounds.  This function returns C<$f> and C<$m>
+without interpolation if no C<$args> are passed.
+
+=head3 Hash Specification
+
+This example will return the interpolated C<$S_new> and C<$f_new> with 10
+frequency samples from 100 to 1000 MHz (inclusive):
 
     ($f_new, $S_new) = m_interpolate($f, $S,
 	{ freq_min_hz => 100e6, freq_max_hz => 1000e6, freq_count => 10,
 	  quiet => 1 # optional
 	} )
-
-This function returns C<$f> and C<$m> without interpolation if no C<$args> are passed.
 
 =over 4
 
@@ -1730,6 +1770,31 @@ This function returns C<$f> and C<$m> without interpolation if no C<$args> are p
 If C<freq_count> is C<1> then only C<freq_min_hz> is returned.
 
 =item * quiet: suppress warnings when interpolating beyond the available frequency range
+
+=back
+
+=head3 Range Specification
+
+The value of C<$args> may be a string that provides a Range Specification.  Each range
+is split on a comma as follows (whitespace is ignored):
+
+    ($f_new, $S_new) = m_interpolate($f, $S, "1e6, 6e6-9e6 x4, 10e6 += 1e6 x3");
+
+Which produces the following frequency selection each in MHz because of the C<e6> suffix:
+
+	1, 6, 7, 8, 9, 10, 11, 12
+
+=over 4
+
+=item * C<N> - The exact frequency in Hz
+
+=item * C<N - M xC> - Select C<C> frequencies from C<N> to C<M> (inclusive) in Hz.  Thus,
+C<6e6-9e6x4> produces the frequencies 6, 7, 8, 9 MHz because of the C<e6> suffix. 
+Values for C<N> and C<M> may be floating-point valued, but C<C> must be an integer.
+
+=item * C<N += SxC> - Select C<C> frequencies starting at C<N> and stepping by
+C<S> in Hz.  Thus, C<10e6 += 1e6x3> produces the frequencies 10, 11, 12 in MHz because of the C<e6> suffix.
+Values for C<N> and C<S> may be floating-point valued, but C<C> must be an integer.
 
 =back
 
