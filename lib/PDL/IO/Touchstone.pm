@@ -1096,8 +1096,18 @@ sub m_interpolate
 		}
 	}
 
+	# Not an elsif, the hash above could have had { range => [] } !
+	if (ref($args) eq 'ARRAY')
+	{
+		$args = join(',', @$args);
+	}
+
 	# Interpolate frequency range and input data:
-	if (!ref($args) && length($args))
+	if (ref($args) eq 'PDL')
+	{
+		$f_new = $args;
+	}
+	elsif (!ref($args) && length($args))
 	{
 		$f_new = [];
 
@@ -1745,7 +1755,51 @@ This function rescales the X-parameter matrix (C<$m>) and frequency set (C<$f>)
 to fit the requested frequency bounds.  This function returns C<$f> and C<$m>
 without interpolation if no C<$args> are passed.
 
-=head3 Hash Specification
+=head3 PDL Frequency-Range Specification
+
+If C<$args> is a PDL object then it defines the frequencies that will be used
+for interpolation in Hz.  The values are used verbatim, no additional processing is
+performed.
+
+=head3 Scalar Frequency-Range Specification
+
+The value of C<$args> may be one of:
+
+=over 4
+
+=item * A scalar float or string.
+
+=item * An ARRAY reference.  If using an ARRAY reference then the array will be
+concatinated into a comma-separated string and used as follows:
+
+=back
+
+Each range is split on a comma as follows (whitespace is ignored):
+
+    ($f_new, $S_new) = m_interpolate($f, $S, "1e6, 6e6-9e6 x4, 10e6 += 1e6 x3");
+
+    # or as an arrayref of strings and floats:
+    ($f_new, $S_new) = m_interpolate($f, $S, [ 1e6, '6e6-9e6 x4', '10e6 += 1e6 x3' ]);
+
+Which produces the following frequency selection each in MHz because of the C<e6> suffix:
+
+	1, 6, 7, 8, 9, 10, 11, 12
+
+=over 4
+
+=item * C<N> - The exact frequency in Hz
+
+=item * C<N - M xC> - Select C<C> frequencies from C<N> to C<M> (inclusive) in Hz.  Thus,
+C<6e6-9e6x4> produces the frequencies 6, 7, 8, 9 MHz because of the C<e6> suffix. 
+Values for C<N> and C<M> may be floating-point valued, but C<C> must be an integer.
+
+=item * C<N += SxC> - Select C<C> frequencies starting at C<N> and stepping by
+C<S> in Hz.  Thus, C<10e6 += 1e6x3> produces the frequencies 10, 11, 12 in MHz because of the C<e6> suffix.
+Values for C<N> and C<S> may be floating-point valued, but C<C> must be an integer.
+
+=back
+
+=head3 Hash Frequency-Range Specification
 
 This example will return the interpolated C<$S_new> and C<$f_new> with 10
 frequency samples from 100 to 1000 MHz (inclusive):
@@ -1766,31 +1820,6 @@ frequency samples from 100 to 1000 MHz (inclusive):
 If C<freq_count> is C<1> then only C<freq_min_hz> is returned.
 
 =item * quiet: suppress warnings when interpolating beyond the available frequency range
-
-=back
-
-=head3 Range Specification
-
-The value of C<$args> may be a string that provides a Range Specification.  Each range
-is split on a comma as follows (whitespace is ignored):
-
-    ($f_new, $S_new) = m_interpolate($f, $S, "1e6, 6e6-9e6 x4, 10e6 += 1e6 x3");
-
-Which produces the following frequency selection each in MHz because of the C<e6> suffix:
-
-	1, 6, 7, 8, 9, 10, 11, 12
-
-=over 4
-
-=item * C<N> - The exact frequency in Hz
-
-=item * C<N - M xC> - Select C<C> frequencies from C<N> to C<M> (inclusive) in Hz.  Thus,
-C<6e6-9e6x4> produces the frequencies 6, 7, 8, 9 MHz because of the C<e6> suffix. 
-Values for C<N> and C<M> may be floating-point valued, but C<C> must be an integer.
-
-=item * C<N += SxC> - Select C<C> frequencies starting at C<N> and stepping by
-C<S> in Hz.  Thus, C<10e6 += 1e6x3> produces the frequencies 10, 11, 12 in MHz because of the C<e6> suffix.
-Values for C<N> and C<S> may be floating-point valued, but C<C> must be an integer.
 
 =back
 
