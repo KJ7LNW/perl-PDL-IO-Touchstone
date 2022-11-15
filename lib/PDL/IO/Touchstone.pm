@@ -1073,6 +1073,29 @@ sub m_interpolate
 	my $f_new = $f;
 	my $quiet;
 
+	if (ref($args) eq 'HASH')
+	{
+		$args->{freq_max_hz} //= $args->{freq_min_hz};
+		$quiet = $args->{quiet};
+
+		if (defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count})
+		{
+			$args = "$args->{freq_min_hz} - $args->{freq_max_hz} x$args->{freq_count}";
+		}
+		elsif (defined $args->{freq_min_hz} || defined $args->{freq_max_hz} || defined $args->{freq_count})
+		{
+			croak("If any of freq_min_hz, freq_max_hz, or freq_count are defined then all must be defined.");
+		}
+		elsif (defined $args->{range})
+		{
+			$args = $args->{range};
+		}
+		else
+		{
+			$args = "";
+		}
+	}
+
 	# Interpolate frequency range and input data:
 	if (!ref($args) && length($args))
 	{
@@ -1108,37 +1131,9 @@ sub m_interpolate
 		# Sort in ascending order, just in case:
 		$f_new = pdl(sort { $a <=> $b } @$f_new);
 	}
-	elsif (ref($args) eq 'HASH')
+	elsif (ref($args))
 	{
-		$quiet = $args->{quiet};
-
-		if ((defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count}) ||
-			defined $args->{freq_min_hz} && defined $args->{freq_count} && $args->{freq_count} == 1)
-		{
-			my $freq_step;
-
-			if ($args->{freq_count} == 1)
-			{
-				$freq_step = 0;
-				$args->{freq_max_hz} = $args->{freq_min_hz};
-			}
-			else
-			{
-				$freq_step = ($args->{freq_max_hz} - $args->{freq_min_hz}) / ($args->{freq_count} - 1);
-			}
-
-			if ($freq_step && $args->{freq_min_hz} >= $args->{freq_max_hz})
-			{
-				croak "freq_min_hz=$args->{freq_min_hz} !< freq_max_hz=$args->{freq_max_hz}"
-			}
-
-
-			$f_new = sequence($args->{freq_count}) * $freq_step + $args->{freq_min_hz};
-		}
-		elsif (defined $args->{freq_min_hz} || defined $args->{freq_max_hz} || defined $args->{freq_count})
-		{
-			croak("If any of freq_min_hz, freq_max_hz, or freq_count are defined then all must be defined.");
-		}
+		croak "\$args is invalid, ref=" . ref($args);
 	}
 	else
 	{
@@ -1146,6 +1141,7 @@ sub m_interpolate
 		return ($f, $m);
 	}
 
+	# At this point $f_new has frequencies to interpolate:
 	my @cx_cols = m_to_pos_vecs($m);
 	my @cx_cols_new;
 	foreach my $cx (@cx_cols)
