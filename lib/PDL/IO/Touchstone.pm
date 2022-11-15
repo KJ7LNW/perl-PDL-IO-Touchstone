@@ -1075,7 +1075,7 @@ sub m_interpolate
 
 	if (ref($args) eq 'HASH')
 	{
-		$args->{freq_max_hz} //= $args->{freq_min_hz};
+		$args->{freq_max_hz} //= $args->{freq_min_hz} if exists($args->{freq_min_hz});
 		$quiet = $args->{quiet};
 
 		if (defined $args->{freq_min_hz} && defined $args->{freq_max_hz} && defined $args->{freq_count})
