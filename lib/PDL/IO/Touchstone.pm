@@ -432,7 +432,7 @@ sub wsnp_fh
 				$count = 8 if $count > 8 || $n_ports == 2;
 
 				my @line;
-				push @line, shift @data while ($count--);
+				push @line, splice(@data, 0, $count);
 
 				print $fd "\t" . join("\t", @line) . "\n";
 			}
