@@ -1634,7 +1634,7 @@ is represented as either:
 
 =back
 
-=head1 S-Parameter Calculaction Functions
+=head1 S-Parameter Calculation Functions
 
 All functions prefixed with "s_" require an S-parameter matrix.
 
@@ -1659,7 +1659,7 @@ Note that C<$z_in> and C<$z_out> are the PDL vectors for the input or output
 impedance at each frequency in C<$f>.  (NB, C<$f> is not actually needed for
 the calculation.)
 
-=head1 Y-Parameter Calculaction Functions
+=head1 Y-Parameter Calculation Functions
 
 All functions prefixed with "y_" require a Y-parameter matrix.
 
