@@ -47,7 +47,7 @@ sub rmdif
 	open(my $in, $filename) or croak "$filename: $!";
 
 	# Clone the input args and add to it:
-	$args = \%{ $args // {} };
+	$args = { %{$args // {}} };
 	$args->{filename} = $filename;
 	$args->{EOF_REGEX} = qr/^END$/;
 
