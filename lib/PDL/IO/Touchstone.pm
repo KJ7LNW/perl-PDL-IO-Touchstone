@@ -1242,7 +1242,7 @@ sub m_to_pos_vecs
 {
 	my $m = shift;
 
-	return $m->dummy(0,1)->clump(0..2)->transpose->dog;
+	return $m->clump(0..1)->transpose->dog;
 }
 
 # inverse of m_to_pos_vecs:
