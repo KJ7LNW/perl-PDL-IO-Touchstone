@@ -3,7 +3,7 @@ lib/PDL/IO/MDIF.pm
 lib/PDL/IO/Touchstone.pm
 LICENSE
 Makefile.PL
-MANIFEST
+MANIFEST			This list of files
 README
 README.md
 t/00-load.t
@@ -18,9 +18,6 @@ t/100-mdif-rewrite.t
 t/11-m_interpolate.t
 t/12-m_interpolate-range.t
 t/20-y_calcs.t
-t/manifest.t
-t/pod-coverage.t
-t/pod.t
 t/test-data/cha3024-99f-lna.s2p
 t/test-data/hmc1118.s3p
 t/test-data/IDEAL_OPEN.s2p
@@ -37,4 +34,3 @@ t/test-data/muRata/ind-muRata-LQW15AN9N9G00.s2p
 t/test-data/muRata/LICENSE.muRata
 t/test-data/muRata/muRata-GQM-0402.mdf
 t/test-data/muRata/README
-xt/boilerplate.t

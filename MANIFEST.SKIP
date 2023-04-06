@@ -1,7 +1,9 @@
 ^.*\.sh$
-^\.gitignore
-^\.github
 ^\.git
 ^ignore\.txt
 ^MANIFEST\.SKIP
 ^ignoredeps
+^xt/
+^Makefile(\.old)?$
+^(MY)?META
+\.sw.$
