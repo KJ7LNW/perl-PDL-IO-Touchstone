@@ -1,11 +1,11 @@
 Changes
-LICENSE
-MANIFEST
-Makefile.PL
-README
-README.md
 lib/PDL/IO/MDIF.pm
 lib/PDL/IO/Touchstone.pm
+LICENSE
+Makefile.PL
+MANIFEST			This list of files
+README
+README.md
 t/01-snp-tests.t
 t/02-snp-read.t
 t/03-read-test-data.t
@@ -17,15 +17,10 @@ t/100-mdif-rewrite.t
 t/11-m_interpolate.t
 t/12-m_interpolate-range.t
 t/20-y_calcs.t
-t/manifest.t
-t/pod-coverage.t
-t/pod.t
-t/test-data/IDEAL_OPEN.s2p
-t/test-data/IDEAL_SHORT.s2p
 t/test-data/cha3024-99f-lna.s2p
 t/test-data/hmc1118.s3p
-t/test-data/muRata/LICENSE.muRata
-t/test-data/muRata/README
+t/test-data/IDEAL_OPEN.s2p
+t/test-data/IDEAL_SHORT.s2p
 t/test-data/muRata/cap-muRata-GRM1555CYA103GE01_10nF_35v.s2p
 t/test-data/muRata/cap-muRata-GRM155R61C105KA12_1uF_16v.s2p
 t/test-data/muRata/ferrite-muRata-BLM15BD182SN1_0402_1800Z_100MHz.s2p
@@ -35,5 +30,6 @@ t/test-data/muRata/ind-choke-muRata-LQW15CA2R0K00.s2p
 t/test-data/muRata/ind-choke-muRata-LQW15DN150M00.s2p
 t/test-data/muRata/ind-muRata-LQW15AN3N8C10.s2p
 t/test-data/muRata/ind-muRata-LQW15AN9N9G00.s2p
+t/test-data/muRata/LICENSE.muRata
 t/test-data/muRata/muRata-GQM-0402.mdf
-xt/boilerplate.t
+t/test-data/muRata/README
