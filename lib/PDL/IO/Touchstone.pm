@@ -20,7 +20,7 @@
 #  respective owners and no grant or license is provided thereof.
 
 package PDL::IO::Touchstone;
-our $VERSION = '1.014';
+our $VERSION = '1.015';
 
 use 5.010;
 use strict;
@@ -245,7 +245,7 @@ sub rsnp_fh
 		for (my $i = 0; $i < @params; $i += 2)
 		{
 			# The data format could be ri, ma, or db but there is
-			# always a pair of data.  Please each in its own array
+			# always a pair of data.  Place each in its own array
 			# and we will convert the format below.
 			push @{ $cols[$col_idx]->[0] }, $params[$i];
 			push @{ $cols[$col_idx]->[1] }, $params[$i+1];
