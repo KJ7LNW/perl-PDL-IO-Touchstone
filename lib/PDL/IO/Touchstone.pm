@@ -146,7 +146,7 @@ sub rsnp_fh
 	my $EOF_REGEX = $args->{EOF_REGEX};
 
 	# Try to enforce the number of ports based on the filename extension.
-	$n_ports = $1 if ($fn =~ /s(\d+)p/i);
+	$n_ports = $1 if ($fn =~ /\.s(\d+)p$/i);
 
 	my $n = 0;
 	my $line;
@@ -231,7 +231,7 @@ sub rsnp_fh
 
 				if ($sqrt_n_params != $n_ports)
 				{
-					croak "$fn:$n: expected $n_ports fields of port data but found $sqrt_n_params: $n_ports != $sqrt_n_params";
+					carp "$fn:$n: expected $n_ports fields of port data (based on filename .sNp extension), but found $sqrt_n_params in the file itself: $n_ports != $sqrt_n_params";
 				}
 			}
 
