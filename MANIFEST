@@ -6,7 +6,6 @@ README
 README.md
 lib/PDL/IO/MDIF.pm
 lib/PDL/IO/Touchstone.pm
-t/00-load.t
 t/01-snp-tests.t
 t/02-snp-read.t
 t/03-read-test-data.t
